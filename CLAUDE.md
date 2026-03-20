@@ -362,6 +362,27 @@ Before closing VS Code at the end of each session:
 1. Run the test suite. Confirm all passing.
 2. Ask Claude Code: "Update CLAUDE.md with any decisions made today
    that are not already recorded here."
-3. Commit everything including the updated CLAUDE.md.
+3. Update GUIDE.md to reflect any new files, commands, or structure
+   added during the session.
+4. Commit everything including the updated CLAUDE.md and GUIDE.md.
 
 This file is the project's memory. Keep it current.
+
+---
+
+## Developer guides
+
+Each engine has its own GUIDE.md alongside the code:
+  - engine/typescript/GUIDE.md — TypeScript/browser engine
+  - engine/lua/GUIDE.md — Lua/LÖVE2D engine (add in Milestone 2)
+
+The root GUIDE.md is an index only — do not put content there.
+
+Update the relevant GUIDE.md whenever:
+  - New files or directories are added to that engine
+  - A new command is needed to build, test, or deploy
+  - The server or tooling setup changes
+  - A milestone is completed
+
+Guides are written for someone new to web development.
+They must always reflect the current state of the project.

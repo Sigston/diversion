@@ -2,10 +2,18 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!-- viewport meta tag: tells mobile browsers not to zoom out to fit a
+         desktop-sized page. initial-scale=1.0 means 1:1 pixel ratio. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Diversion</title>
   </head>
   <body>
+    <!-- The entire UI is three elements:
+         #output    — the scrolling history of all printed lines
+         #prompt    — the > symbol before the input
+         #input     — the text field the player types into
+         Everything is laid out and styled in style.css.
+         All behaviour is in src/main.ts. -->
     <div id="terminal">
       <div id="output"></div>
       <div id="input-line">
@@ -13,6 +21,8 @@
         <input id="input" type="text" autocomplete="off" spellcheck="false" />
       </div>
     </div>
+    <!-- type="module" enables modern JS module syntax (import/export).
+         Vite replaces this with the compiled bundle at build time. -->
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -1,9 +1,14 @@
+/* Reset browser defaults — different browsers add different margins/padding
+   by default, which causes inconsistent layouts. Zero them out. */
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
+/* Dark background, monospace font throughout.
+   overflow: hidden prevents the body itself from scrolling — only the
+   #output div scrolls internally. */
 body {
   background: #1a1a1a;
   font-family: 'Courier New', Courier, monospace;
@@ -11,6 +16,11 @@ body {
   overflow: hidden;
 }
 
+/* The terminal fills the full viewport.
+   position: fixed + inset: 0 pins it to all four edges regardless of
+   what else is happening on the page (e.g. mobile keyboard appearing).
+   The JS in main.ts adjusts height dynamically for mobile keyboards.
+   flex + flex-direction: column stacks #output above #input-line. */
 #terminal {
   display: flex;
   flex-direction: column;
@@ -19,12 +29,16 @@ body {
   padding: 16px;
 }
 
+/* Output area takes all available vertical space (flex: 1) and scrolls
+   internally when it fills up. */
 #output {
   flex: 1;
   overflow-y: auto;
   margin-bottom: 8px;
 }
 
+/* Each line of output is a <p> element. pre-wrap preserves whitespace
+   and line breaks in text. word-break prevents long words overflowing. */
 #output p {
   margin: 2px 0;
   line-height: 1.6;
@@ -32,6 +46,8 @@ body {
   word-break: break-word;
 }
 
+/* Input line sits at the bottom, separated by a subtle border.
+   flex-shrink: 0 prevents it from being squashed if the output is full. */
 #input-line {
   display: flex;
   align-items: center;
@@ -40,11 +56,15 @@ body {
   flex-shrink: 0;
 }
 
+/* The > prompt symbol. White to stand out from the blue input text. */
 #prompt {
   color: #ffffff;
   white-space: nowrap;
 }
 
+/* The text input itself. background: transparent and border: none make it
+   invisible — it looks like the cursor is just sitting on the terminal line.
+   The caret (blinking cursor) is coloured to match the input text. */
 #input {
   background: transparent;
   border: none;

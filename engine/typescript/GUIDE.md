@@ -24,9 +24,25 @@ engine/typescript/
 ├── package.json        Project metadata and npm script shortcuts.
 ├── node_modules/       Installed dependencies (never edit, never commit).
 └── src/
-    ├── main.ts         All terminal behaviour: print, submit, history,
+    ├── main.ts         Terminal behaviour: print, submit, history,
     │                   keyboard handling, mobile viewport fix.
-    └── style.css       Terminal appearance: layout, colours, fonts.
+    ├── style.css       Terminal appearance: layout, colours, fonts.
+    ├── types.ts        Shared TypeScript interfaces (CommandIntent, etc.)
+    ├── lexicon/
+    │   ├── verbs.ts        Verb table + synonymMap
+    │   ├── prepositions.ts Set of known prepositions
+    │   └── stopwords.ts    Set of stopwords stripped before matching
+    ├── parser/
+    │   ├── tokeniser.ts    Stage 1: raw string -> token list
+    │   ├── tagger.ts       Stage 2: tokens -> partial CommandIntent
+    │   ├── resolver.ts     Stage 3: fills dobjRef and iobjRef
+    │   ├── dispatcher.ts   Stage 4: runs verify/check/action cycle
+    │   └── index.ts        Entry point: process(rawInput)
+    ├── world/
+    │   ├── world.ts        World model: rooms, objects, scope, inventory
+    │   └── defaults.ts     Default verb handlers
+    └── test/
+        └── parserTest.ts   12-test suite, runs on page load
 ```
 
 ---
@@ -91,10 +107,10 @@ cd engine/typescript && npm run build && cd ../.. && rsync -av engine/typescript
 
 ---
 
-## Current state — Milestone 0
+## Current state — Milestone 1a complete
 
-The terminal accepts input, echoes it back, and responds "No game loaded."
-The engine is wired in during Milestone 1a.
+Full parser pipeline running in the browser. The game is live at
+`http://a-james.com/game/`.
 
 **Colour scheme:**
 

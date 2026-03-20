@@ -48,13 +48,16 @@ This section summarises the decisions most likely to affect Claude Code's work.
 ```
 /
 ├── CLAUDE.md
+├── GUIDE.md               index only — points to engine guides
+├── main.lua               LÖVE2D entry point (runs tests in M1a; full game in M2)
 ├── docs/
 │   ├── diversion-brief.md
 │   └── architecture.md
 ├── engine/
 │   ├── lua/
-│   │   ├── main.lua
-│   │   ├── terminal.lua
+│   │   ├── GUIDE.md
+│   │   ├── loader.lua     JSON loader stub (Milestone 3)
+│   │   ├── terminal.lua   LÖVE2D terminal UI stub (Milestone 2)
 │   │   ├── parser/
 │   │   │   ├── init.lua
 │   │   │   ├── tokeniser.lua
@@ -70,20 +73,21 @@ This section summarises the decisions most likely to affect Claude Code's work.
 │   │       ├── prepositions.lua
 │   │       └── stopwords.lua
 │   └── typescript/
-│       ├── src/
-│       │   ├── main.ts
-│       │   ├── terminal.ts
-│       │   ├── parser/
-│       │   ├── world/
-│       │   └── lexicon/
+│       ├── GUIDE.md
+│       ├── index.html
+│       ├── vite.config.ts
 │       ├── package.json
-│       └── tsconfig.json
+│       ├── tsconfig.json
+│       └── src/
+│           ├── main.ts
+│           ├── style.css
+│           ├── types.ts
+│           ├── parser/
+│           ├── world/
+│           ├── lexicon/
+│           └── test/
 ├── game/
-│   └── data/
-│       ├── rooms.json
-│       ├── objects.json
-│       ├── events.json
-│       └── handlers.json
+│   └── data/              JSON game data (Milestone 3)
 └── test/
     └── parser_test.lua
 ```
@@ -280,15 +284,15 @@ Goal: a working browser terminal, live on the website, with no game yet.
 
 Goal: end-to-end loop working simply, no disambiguation yet.
 
-- [ ] Verb lexicon (with resolveObj and resolveFirst fields)
-- [ ] Tokeniser
-- [ ] Tagger (single-word synonyms only)
-- [ ] Minimal world stub: current room, objects, inventory, scope query
-- [ ] Dispatcher with verify/check/action cycle
-- [ ] Simple resolver: first match only, no disambiguation
-- [ ] Default handlers: examine, look, inventory
-- [ ] test/parser_test.lua passing
-- [ ] TypeScript port of all of the above
+- [x] Verb lexicon (with resolveObj and resolveFirst fields)
+- [x] Tokeniser
+- [x] Tagger (single-word synonyms only)
+- [x] Minimal world stub: current room, objects, inventory, scope query
+- [x] Dispatcher with verify/check/action cycle
+- [x] Simple resolver: first match only, no disambiguation
+- [x] Default handlers: examine, look, inventory
+- [x] test/parser_test.lua passing (12 tests)
+- [x] TypeScript port of all of the above
 
 Do not build in Milestone 1a:
   - verify() scoring or disambiguation
@@ -374,7 +378,7 @@ This file is the project's memory. Keep it current.
 
 Each engine has its own GUIDE.md alongside the code:
   - engine/typescript/GUIDE.md — TypeScript/browser engine
-  - engine/lua/GUIDE.md — Lua/LÖVE2D engine (add in Milestone 2)
+  - engine/lua/GUIDE.md — Lua/LÖVE2D engine
 
 The root GUIDE.md is an index only — do not put content there.
 

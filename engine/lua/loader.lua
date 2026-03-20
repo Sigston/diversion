@@ -1,0 +1,5 @@
+-- loader.lua
+-- Reads JSON game data files and wires everything together:
+-- populates the world model, connects handler references to functions,
+-- sets up narrator responses.
+-- Built in Milestone 3.

@@ -1,0 +1,3 @@
+-- terminal.lua
+-- The LÖVE2D terminal UI: scrolling buffer, input line, command history.
+-- Built in Milestone 2. Not needed for headless testing in Milestone 1.

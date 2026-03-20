@@ -1,0 +1,4 @@
+-- world/state.lua
+-- Global state flags and save/load.
+-- e.g. State.set("lamp_lit", true), State.get("lamp_lit")
+-- Built in Milestone 1a (flags only). Save/load in Milestone 2.

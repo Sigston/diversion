@@ -40,7 +40,9 @@ engine/typescript/
     │   └── index.ts        Entry point: process(rawInput)
     ├── world/
     │   ├── world.ts        World model: rooms, objects, scope, inventory
-    │   └── defaults.ts     Default verb handlers (examine, look, inventory, take, drop, go/directions, put, unlock, lock)
+    │   ├── loader.ts       Reads game/data/*.json (Vite static imports), calls World.load()
+    │   └── defaults.ts     Default verb handlers (examine, look, inventory, take, drop,
+    │                       go/directions, put, unlock, lock, wait, help, quit)
     └── test/
         └── parserTest.ts   49-test suite, runs on page load
 ```
@@ -57,7 +59,7 @@ engine/typescript/
 **`tsconfig.json`** — tells the TypeScript compiler how strict to be and
 what JavaScript features to target. `strict: true` catches common mistakes.
 `noEmit: true` means TypeScript only type-checks; Vite handles the actual
-compilation.
+compilation. `resolveJsonModule: true` allows importing the game data JSON files.
 
 **`vite.config.ts`** — minimal config. The only setting is `base: '/game/'`
 which tells Vite the app lives at `/game/` on the server, so asset paths
@@ -107,21 +109,18 @@ cd engine/typescript && npm run build && cd ../.. && rsync -av engine/typescript
 
 ---
 
-## Current state — Milestone 1b complete
+## Current state — M3 data layer complete
 
-Full parser pipeline with disambiguation running in the browser. The game
-is live at `http://a-james.com/game/`.
+Full parser pipeline, JSON-loaded world, both running in the browser.
+The game is live at `http://a-james.com/game/`.
 
-Key additions since M1a:
-- `types.ts` — `VerifyResult` union now includes `dangerous`, `illogicalAlready`,
-  `illogicalNow`. `fixed?: boolean` added to `GameObject`.
-- `parser/resolver.ts` — `verifyRank()` and `filterCandidates()` exported.
-  `resolve()` now returns a `ResolveResult` discriminated union
-  (`ResolveOk | ResolveFailNotFound | ResolveFailAmbiguous`).
-- `parser/index.ts` — disambiguation FSM (NORMAL / AWAIT_CLARIFY).
-  `reset()` exported for test isolation.
-- `world/world.ts` — `entrance_passage` room, north/south exits, `World.moveTo()`.
-- `world/defaults.ts` — take, drop, go handlers added.
+- `world/loader.ts` — `loadWorld()` imports `game/data/rooms.json` and
+  `game/data/objects.json` as static Vite assets, builds room/object tables,
+  calls `World.load()`. Called once in `main.ts` before tests or input.
+- `world/world.ts` — hardcoded data removed. `World.load()` populates state
+  and snapshots it for `reset()`.
+- `world/defaults.ts` — `wait`, `help`, `quit` handlers added (25 verbs total).
+- `main.ts` — calls `loadWorld()` on startup before test suite or player input.
 
 **Colour scheme:**
 

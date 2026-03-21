@@ -1,6 +1,10 @@
 import './style.css'
+import { loadWorld } from './world/loader.ts'
 import { process }   from './parser/index.ts'
 import { runTests }  from './test/parserTest.ts'
+
+// Load world from JSON before any parser or world operations.
+loadWorld()
 
 // ---------------------------------------------------------------------------
 // Colour palette — matches architecture doc §10 and Lua implementation.

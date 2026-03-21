@@ -6,9 +6,13 @@
 
 package.path = "./?.lua;" .. package.path
 
-local Parser = require("engine.lua.parser.init")
-local World  = require("engine.lua.world.world")
+local Parser   = require("engine.lua.parser.init")
+local World    = require("engine.lua.world.world")
 local Resolver = require("engine.lua.parser.resolver")
+local Loader   = require("engine.lua.loader")
+
+-- Load world data from JSON once before any tests run.
+Loader.load()
 
 -- run(printFn) — printFn defaults to Lua's built-in print.
 -- Pass a custom function to redirect output (e.g. to the LÖVE2D terminal).

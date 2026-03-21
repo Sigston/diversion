@@ -1,0 +1,23 @@
+{
+  "startRoom": "player_quarters",
+  "rooms": {
+    "player_quarters": {
+      "name": "Your Quarters",
+      "description": {
+        "firstVisit": "Your quarters are exactly as you left them — which is to say, arranged with the particular chaos of someone who knows where everything is. The writing desk dominates one wall. An oil lamp sits where you last set it down. Somewhere nearby, an iron key catches the light.",
+        "revisit": "Your quarters. The writing desk, the lamp, the key."
+      },
+      "exits": { "north": "entrance_passage" },
+      "objects": ["iron_key", "copper_key", "oil_lamp", "writing_desk", "chest"]
+    },
+    "entrance_passage": {
+      "name": "Entrance Passage",
+      "description": {
+        "firstVisit": "A narrow stone passage leads away from your quarters. Bare walls, bare floor. The way back is to the south.",
+        "revisit": "The entrance passage. Bare stone."
+      },
+      "exits": { "south": "player_quarters" },
+      "objects": []
+    }
+  }
+}

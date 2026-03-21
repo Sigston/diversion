@@ -13,6 +13,7 @@
 
 local Parser   = require("engine.lua.parser.init")
 local World    = require("engine.lua.world.world")
+local Loader   = require("engine.lua.loader")
 local runTests = require("test.parser_test")
 
 local Terminal = {}
@@ -209,6 +210,7 @@ function Terminal.init()
 
     love.window.setTitle("Diversion")
 
+    Loader.load()
     World.reset()
 
     -- Show the starting room on startup (same as typing "look")

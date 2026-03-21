@@ -533,14 +533,49 @@ FAIL→error, headers→narrator, summary→error if failures). After the run, c
 
 ## Milestone 3 — JSON loader and data schema (both languages)
 
-- [ ] Define JSON schema for rooms, objects, events, handlers
-- [ ] Lua loader: reads JSON, instantiates world model
-- [ ] TypeScript loader: same JSON, same contract
+- [x] Define JSON schema for rooms, objects (data-only subset; handler registry deferred)
+- [x] Lua loader: reads JSON, instantiates world model
+- [x] TypeScript loader: same JSON, same contract
 - [ ] Handler registry: named handlers registered in engine,
       referenced by string from JSON
 - [ ] AI narrator response layer: per-room, per-object, per-verb overrides
 - [ ] Cross-period inventory tracking in world model
 - [ ] Period overlay system for revisitable periods
+
+### M3 implementation notes (data layer)
+
+**JSON schema — current subset:**
+
+`game/data/rooms.json` — `{ startRoom, rooms: { key: { name, description, exits, objects } } }`
+Room `description` is either a plain string or `{ firstVisit, revisit }`. The loader
+converts both forms to `function(self, ctx) → string` at load time. The `revisit`
+key name avoids the Lua reserved word `repeat`.
+
+`game/data/objects.json` — `{ key: { name, aliases, adjectives, description, location,
+portable, fixed?, locked?, lockKey? } }`. JSON `null` location decodes to Lua `nil`
+(field absent), which is the correct "not in world" sentinel.
+
+**`lib/json.lua`** — rxi/json.lua (MIT). Works in both LÖVE2D and headless Lua.
+Required as `require("lib.json")` from the project root.
+
+**`engine/lua/loader.lua`** — `Loader.load()` reads both JSON files via `io.open`
+(falls back to `love.filesystem.read` if available), parses them, builds room and
+object tables, calls `World.load()`.
+
+**`engine/typescript/src/world/loader.ts`** — `loadWorld()` uses Vite's static JSON
+imports (`import roomsJson from '../../../../game/data/rooms.json'`). Requires
+`"resolveJsonModule": true` in tsconfig.json.
+
+**`world.lua` / `world.ts`** — hardcoded data removed. `World.load(rooms, objects,
+startRoom)` populates the tables and snapshots mutable state (`location`, `locked`,
+`visited`) for `reset()`. `World.reset()` restores from that snapshot rather than
+hardcoded values. Both runtimes now load identically from the same JSON files.
+
+**`test/parser_test.lua`** — calls `Loader.load()` at module level (before `run()`)
+so the world is populated before any test calls `World.reset()`.
+
+**`engine/lua/terminal.lua`** — `Terminal.init()` now calls `Loader.load()` then
+`World.reset()` instead of just `World.reset()`.
 
 ---
 

@@ -24,6 +24,8 @@ engine/lua/
 ├── terminal.lua            LÖVE2D terminal UI: scrolling buffer, input line,
 │                           command history, colour output, mouse/keyboard scroll.
 │                           Meta-commands: test (inline test runner), quit.
+├── loader.lua              Reads game/data/rooms.json + objects.json, builds world
+│                           tables, calls World.load(). Works headless and in LÖVE2D.
 ├── lexicon/
 │   ├── verbs.lua           Verb table: synonyms, resolveObj, resolveFirst.
 │   │                       Also builds synonymMap (word -> canonical verb).
@@ -48,7 +50,10 @@ Also at the project root:
 
 ```
 main.lua                    LÖVE2D entry point — wires terminal to love callbacks
+lib/json.lua                rxi JSON parser (MIT). Used by loader.lua.
 test/parser_test.lua        Headless test suite (49 tests, all passing)
+game/data/rooms.json        Room definitions: names, descriptions, exits, object lists
+game/data/objects.json      Object definitions: names, aliases, adjectives, properties
 ```
 
 ---
@@ -254,7 +259,7 @@ order:
 
 ---
 
-## Current state — Milestone 2 complete
+## Current state — Milestone 2 complete, M3 data layer complete
 
 LÖVE2D interactive terminal running. Full parser pipeline behind it.
 
@@ -272,9 +277,11 @@ LÖVE2D interactive terminal running. Full parser pipeline behind it.
 **Default handlers:** examine, look, inventory, take, drop, go, put, unlock,
 lock, wait, help, quit (25 canonical verbs total)
 
-**World stub:** two rooms, five objects (copper_key and chest are test stubs).
+**World data:** loaded from `game/data/rooms.json` and `game/data/objects.json`
+at startup via `Loader.load()`. The world stub is no longer hardcoded.
+Two rooms, five objects (copper_key and chest are test stubs).
 
-Next milestone (3): JSON loader and data schema.
+Next: handler registry, narrator response layer, then game content.
 
 ---
 

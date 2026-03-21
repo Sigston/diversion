@@ -1,116 +1,51 @@
 // world/world.ts
-// See engine/lua/world/world.lua for full documentation.
+//
+// The world model. Owns all rooms and objects, answers scope queries,
+// and handles player movement.
+//
+// Populated at startup by loadWorld() / World.load(). Never hardcodes game
+// content — all data comes from JSON via the loader.
 
 import type { GameObject, Room, WorldContext } from '../types.ts'
 
 // ---------------------------------------------------------------------------
-// Objects
+// Module-level state — populated by World.load()
 // ---------------------------------------------------------------------------
-interface ObjectStore { [key: string]: GameObject }
+let rooms:          Record<string, Room>       = {}
+let objects:        Record<string, GameObject> = {}
+let currentRoomKey  = ''
+let startRoomKey    = ''
 
-const initialLocations: Record<string, string> = {
-    iron_key:     'player_quarters',
-    copper_key:   'player_quarters',
-    oil_lamp:     'player_quarters',
-    writing_desk: 'player_quarters',
-    chest:        'player_quarters',
-}
-
-const objects: ObjectStore = {
-    iron_key: {
-        name:        'iron key',
-        aliases:     ['key'],
-        adjectives:  ['iron', 'old', 'small'],
-        description: 'A small iron key. The bow is cast in the shape of a hare.',
-        location:    'player_quarters',
-        portable:    true,
-        handlers:    {},
-    },
-    copper_key: {
-        name:        'copper key',
-        aliases:     ['key'],
-        adjectives:  ['copper', 'small'],
-        description: "A small copper key. Simpler in design than you'd expect.",
-        location:    'player_quarters',
-        portable:    true,
-        handlers:    {},
-    },
-    oil_lamp: {
-        name:        'oil lamp',
-        aliases:     ['lamp'],
-        adjectives:  ['oil', 'brass', 'old'],
-        description: 'A brass oil lamp. The reservoir is about half full.',
-        location:    'player_quarters',
-        portable:    true,
-        handlers:    {},
-    },
-    writing_desk: {
-        name:        'writing desk',
-        aliases:     ['desk'],
-        adjectives:  ['writing', 'large', 'wooden'],
-        description: 'A large wooden desk. Its surface is bare except for a ' +
-                     'faint ring left by some long-gone cup.',
-        location:    'player_quarters',
-        portable:    false,
-        handlers:    {},
-    },
-    chest: {
-        name:        'small chest',
-        aliases:     ['chest'],
-        adjectives:  ['small', 'wooden'],
-        description: 'A small wooden chest secured with an iron lock.',
-        location:    'player_quarters',
-        portable:    false,
-        locked:      true,
-        lockKey:     'iron_key',
-        handlers:    {},
-    },
-}
+// Snapshot of mutable object/room state taken at load time, used by reset().
+interface ObjectSnap { location: string | null; locked?: boolean }
+interface RoomSnap   { visited: boolean }
+const initialState: Record<string, ObjectSnap | RoomSnap> = {}
 
 // ---------------------------------------------------------------------------
-// Rooms
-// ---------------------------------------------------------------------------
-const rooms: Record<string, Room> = {
-    player_quarters: {
-        name: 'Your Quarters',
-        description(self, _ctx) {
-            if (!self.visited) {
-                return 'Your quarters are exactly as you left them — which is to ' +
-                       'say, arranged with the particular chaos of someone who ' +
-                       'knows where everything is. The writing desk dominates one ' +
-                       'wall. An oil lamp sits where you last set it down. ' +
-                       'Somewhere nearby, an iron key catches the light.'
-            }
-            return 'Your quarters. The writing desk, the lamp, the key.'
-        },
-        exits:    { north: 'entrance_passage' },
-        objects:  ['iron_key', 'copper_key', 'oil_lamp', 'writing_desk', 'chest'],
-        handlers: {},
-        visited:  false,
-    },
-
-    entrance_passage: {
-        name: 'Entrance Passage',
-        description(self, _ctx) {
-            if (!self.visited) {
-                return 'A narrow stone passage leads away from your quarters. ' +
-                       'Bare walls, bare floor. The way back is to the south.'
-            }
-            return 'The entrance passage. Bare stone.'
-        },
-        exits:    { south: 'player_quarters' },
-        objects:  [],
-        handlers: {},
-        visited:  false,
-    },
-}
-
-let currentRoomKey = 'player_quarters'
-
-// ---------------------------------------------------------------------------
-// World API
+// World.load — called once by loadWorld() after parsing JSON.
 // ---------------------------------------------------------------------------
 export const World = {
+
+    load(
+        roomsTable:  Record<string, Room>,
+        objectsTable: Record<string, GameObject>,
+        startRoom:   string
+    ): void {
+        rooms          = roomsTable
+        objects        = objectsTable
+        startRoomKey   = startRoom
+        currentRoomKey = startRoom
+
+        // Snapshot mutable state for reset()
+        for (const [key, obj] of Object.entries(objects)) {
+            const snap: ObjectSnap = { location: obj.location }
+            if (obj.locked !== undefined) snap.locked = obj.locked
+            initialState[key] = snap
+        }
+        for (const key of Object.keys(rooms)) {
+            initialState[key] = { visited: false }
+        }
+    },
 
     currentRoom(): Room {
         return rooms[currentRoomKey]
@@ -157,6 +92,20 @@ export const World = {
         return 'You are carrying: ' + carried.join(', ') + '.'
     },
 
+    // Resets all mutable world state to the values captured at load time.
+    reset(): void {
+        for (const [key, snap] of Object.entries(initialState)) {
+            if (key in rooms) {
+                rooms[key].visited = false
+            } else if (key in objects) {
+                const s = snap as ObjectSnap
+                objects[key].location = s.location
+                if (s.locked !== undefined) objects[key].locked = s.locked
+            }
+        }
+        currentRoomKey = startRoomKey
+    },
+
     moveTo(roomKey: string): void {
         currentRoomKey = roomKey
     },
@@ -167,16 +116,5 @@ export const World = {
 
     getObject(key: string): GameObject | undefined {
         return objects[key]
-    },
-
-    reset(): void {
-        for (const room of Object.values(rooms)) {
-            room.visited = false
-        }
-        for (const [key, loc] of Object.entries(initialLocations)) {
-            objects[key].location = loc
-        }
-        objects.chest.locked = true
-        currentRoomKey = 'player_quarters'
     },
 }

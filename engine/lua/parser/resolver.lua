@@ -4,15 +4,13 @@
 -- Turns the noun-phrase word lists in a CommandIntent into actual object
 -- references, by matching them against in-scope objects.
 --
--- Milestone 1a: simple resolver — takes the first matching object.
--- Milestone 1b: full resolver — verify() scoring and disambiguation.
---
 -- For each noun phrase (dobjWords, iobjWords):
 --   1. Get all in-scope objects from World.inScope()
 --   2. Filter to those whose name or aliases contain the noun (last word)
 --   3. Further filter by adjectives if any were given
---   4. If 0 matches -> FAIL_NOT_FOUND
---   5. If 1+ matches -> take the first one (M1a; M1b will score these)
+--   4. If 0 candidates  -> FAIL_NOT_FOUND
+--   5. If 1 candidate   -> assign directly
+--   6. If N candidates  -> score with verify(), rank, auto-resolve or FAIL_AMBIGUOUS
 --
 -- Resolution order for two-object verbs is read from the verb lexicon
 -- (resolveFirst = "dobj" or "iobj"). Default is "iobj".
@@ -20,14 +18,32 @@
 -- Verbs with resolveObj = false skip resolution entirely — their dobjWords
 -- contain non-object data (e.g. a direction) or are empty.
 
-local World = require("engine.lua.world.world")
-local Verbs = require("engine.lua.lexicon.verbs")
+local World    = require("engine.lua.world.world")
+local Verbs    = require("engine.lua.lexicon.verbs")
+local Defaults = require("engine.lua.world.defaults")
 
 local Resolver = {}
 
--- Return values used to signal resolution outcomes to the caller.
+-- Return values used to signal resolution outcomes to init.lua.
 Resolver.FAIL_NOT_FOUND = "FAIL_NOT_FOUND"
-Resolver.FAIL_AMBIGUOUS = "FAIL_AMBIGUOUS"   -- used in Milestone 1b
+Resolver.FAIL_AMBIGUOUS = "FAIL_AMBIGUOUS"
+
+-- ---------------------------------------------------------------------------
+-- verifyRank(result)
+--
+-- Maps a verify() result table to a numeric rank for disambiguation scoring.
+-- Higher rank = more preferred candidate.
+-- ---------------------------------------------------------------------------
+function Resolver.verifyRank(result)
+    if not result              then return 100 end
+    if result.logical          then return result.rank or 100 end
+    if result.dangerous        then return 90  end
+    if result.illogicalAlready then return 40  end
+    if result.illogicalNow     then return 40  end
+    if result.illogical        then return 30  end
+    if result.nonObvious       then return 30  end
+    return 100
+end
 
 -- ---------------------------------------------------------------------------
 -- matchObject(wordList, candidates)
@@ -97,72 +113,147 @@ local function matchObject(wordList, candidates)
 end
 
 -- ---------------------------------------------------------------------------
--- resolveNounPhrase(wordList)
+-- getVerifyResult(obj, verb, intent)
+--
+-- Calls verify() on the most specific handler available for this object/verb.
+-- Lookup order: object-specific handler, then default handler.
+-- Returns nil if no verify() phase exists (= no objection, rank 100).
+-- ---------------------------------------------------------------------------
+local function getVerifyResult(obj, verb, intent)
+    local handler = (obj.handlers and obj.handlers[verb]) or Defaults[verb]
+    if handler and handler.verify then
+        return handler.verify(obj, intent)
+    end
+    return nil
+end
+
+-- ---------------------------------------------------------------------------
+-- resolveNounPhrase(wordList, verb, intent)
 --
 -- Resolves a single noun phrase to an object reference.
--- Returns the object, or Resolver.FAIL_NOT_FOUND.
+--
+-- Returns (success path):
+--   obj, false   -- exactly one candidate matched; no announcement needed
+--   obj, true    -- auto-resolved from multiple candidates; prepend "(the name)"
+--
+-- Returns (failure path):
+--   FAIL_NOT_FOUND, wordList   -- nothing matched
+--   FAIL_AMBIGUOUS, candidates -- multiple candidates tied; ask for clarification
 -- ---------------------------------------------------------------------------
-local function resolveNounPhrase(wordList)
+local function resolveNounPhrase(wordList, verb, intent)
     if not wordList or #wordList == 0 then
-        return nil  -- no noun phrase given; not an error
+        return nil, nil  -- no noun phrase given; not an error
     end
 
     local candidates = World.inScope()
     local matches    = matchObject(wordList, candidates)
 
     if #matches == 0 then
-        return Resolver.FAIL_NOT_FOUND
+        return Resolver.FAIL_NOT_FOUND, wordList
     end
 
-    -- Milestone 1a: just take the first match.
-    -- Milestone 1b: score with verify() and handle ties.
-    return matches[1]
+    if #matches == 1 then
+        return matches[1], false  -- single match; no auto-resolve announcement
+    end
+
+    -- Multiple candidates: score each with verify() and rank them.
+    local scored = {}
+    for _, obj in ipairs(matches) do
+        local result = getVerifyResult(obj, verb, intent)
+        scored[#scored + 1] = { obj = obj, rank = Resolver.verifyRank(result) }
+    end
+
+    local best = 0
+    for _, s in ipairs(scored) do
+        if s.rank > best then best = s.rank end
+    end
+
+    local top = {}
+    for _, s in ipairs(scored) do
+        if s.rank == best then
+            top[#top + 1] = s.obj
+        end
+    end
+
+    if #top == 1 then
+        return top[1], true  -- unique highest rank: auto-resolve
+    end
+
+    return Resolver.FAIL_AMBIGUOUS, top  -- tied: ask for clarification
 end
 
 -- ---------------------------------------------------------------------------
 -- resolve(intent)
 --
 -- Fills in dobjRef and iobjRef on the intent table.
--- Returns the intent on success, or a fail constant on failure.
+--
+-- Returns two values: result, extra
+--
+--   On success:
+--     result = intent (fully or partially resolved)
+--     extra  = { dobj = obj|nil, iobj = obj|nil }
+--              non-nil fields indicate auto-resolved objects (need announcement)
+--
+--   On FAIL_NOT_FOUND:
+--     result = Resolver.FAIL_NOT_FOUND
+--     extra  = { words = wordList }
+--
+--   On FAIL_AMBIGUOUS:
+--     result = Resolver.FAIL_AMBIGUOUS
+--     extra  = { candidates, which, intent }
+--              'intent' has any previously resolved refs already set
 -- ---------------------------------------------------------------------------
 function Resolver.resolve(intent)
     local verbEntry = Verbs[intent.verb]
 
     -- If this verb doesn't resolve objects, pass the intent straight through.
     if not verbEntry or not verbEntry.resolveObj then
-        return intent
+        return intent, {}
     end
 
-    -- Determine resolution order from the lexicon.
     local resolveFirst = verbEntry.resolveFirst or "iobj"
+    local autoInfo     = {}  -- populated when auto-resolving from multiple candidates
 
-    local function resolvePhrase(wordList)
-        local result = resolveNounPhrase(wordList)
-        if result == Resolver.FAIL_NOT_FOUND then
-            return nil, Resolver.FAIL_NOT_FOUND
+    -- Resolve one noun phrase; update autoInfo; return error info on failure.
+    local function resolvePhrase(wordList, which)
+        local obj, extra = resolveNounPhrase(wordList, intent.verb, intent)
+        if obj == Resolver.FAIL_NOT_FOUND then
+            return nil, Resolver.FAIL_NOT_FOUND, { words = extra }
         end
-        return result, nil
+        if obj == Resolver.FAIL_AMBIGUOUS then
+            -- extra is the tied candidate list
+            return nil, Resolver.FAIL_AMBIGUOUS,
+                   { candidates = extra, which = which, intent = intent }
+        end
+        if extra == true then
+            autoInfo[which] = obj  -- flag for auto-resolve announcement
+        end
+        return obj, nil, nil
     end
 
     if resolveFirst == "iobj" then
-        -- Resolve indirect object first, then direct object.
-        local iobjRef, err = resolvePhrase(intent.iobjWords)
-        if err then return err end
-        local dobjRef, err2 = resolvePhrase(intent.dobjWords)
-        if err2 then return err2 end
+        local iobjRef, err, data = resolvePhrase(intent.iobjWords, "iobj")
+        if err then return err, data end
+        local dobjRef, err2, data2 = resolvePhrase(intent.dobjWords, "dobj")
+        if err2 then return err2, data2 end
         intent.iobjRef = iobjRef
         intent.dobjRef = dobjRef
     else
-        -- Resolve direct object first, then indirect object.
-        local dobjRef, err = resolvePhrase(intent.dobjWords)
-        if err then return err end
-        local iobjRef, err2 = resolvePhrase(intent.iobjWords)
-        if err2 then return err2 end
+        local dobjRef, err, data = resolvePhrase(intent.dobjWords, "dobj")
+        if err then return err, data end
+        local iobjRef, err2, data2 = resolvePhrase(intent.iobjWords, "iobj")
+        if err2 then return err2, data2 end
         intent.dobjRef = dobjRef
         intent.iobjRef = iobjRef
     end
 
-    return intent
+    return intent, autoInfo
+end
+
+-- Exposed for use in handleClarification: filters a candidate list using the
+-- same adjective+noun matching as the full resolver.
+function Resolver.filterCandidates(wordList, candidates)
+    return matchObject(wordList, candidates)
 end
 
 return Resolver

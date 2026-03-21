@@ -40,9 +40,9 @@ engine/typescript/
     │   └── index.ts        Entry point: process(rawInput)
     ├── world/
     │   ├── world.ts        World model: rooms, objects, scope, inventory
-    │   └── defaults.ts     Default verb handlers
+    │   └── defaults.ts     Default verb handlers (examine, look, inventory, take, drop, go/directions, put, unlock, lock)
     └── test/
-        └── parserTest.ts   12-test suite, runs on page load
+        └── parserTest.ts   49-test suite, runs on page load
 ```
 
 ---
@@ -107,10 +107,21 @@ cd engine/typescript && npm run build && cd ../.. && rsync -av engine/typescript
 
 ---
 
-## Current state — Milestone 1a complete
+## Current state — Milestone 1b complete
 
-Full parser pipeline running in the browser. The game is live at
-`http://a-james.com/game/`.
+Full parser pipeline with disambiguation running in the browser. The game
+is live at `http://a-james.com/game/`.
+
+Key additions since M1a:
+- `types.ts` — `VerifyResult` union now includes `dangerous`, `illogicalAlready`,
+  `illogicalNow`. `fixed?: boolean` added to `GameObject`.
+- `parser/resolver.ts` — `verifyRank()` and `filterCandidates()` exported.
+  `resolve()` now returns a `ResolveResult` discriminated union
+  (`ResolveOk | ResolveFailNotFound | ResolveFailAmbiguous`).
+- `parser/index.ts` — disambiguation FSM (NORMAL / AWAIT_CLARIFY).
+  `reset()` exported for test isolation.
+- `world/world.ts` — `entrance_passage` room, north/south exits, `World.moveTo()`.
+- `world/defaults.ts` — take, drop, go handlers added.
 
 **Colour scheme:**
 

@@ -8,8 +8,10 @@ import { Defaults } from '../world/defaults.ts'
 function runCycle(handler: Handler, obj: GameObject | null, intent: CommandIntent): string {
     if (handler.verify) {
         const result = handler.verify(obj, intent)
-        if (result && 'illogical' in result) {
-            return result.illogical
+        if (result) {
+            if ('illogical'      in result) return result.illogical
+            if ('illogicalAlready' in result) return result.illogicalAlready
+            if ('illogicalNow'   in result) return result.illogicalNow
         }
     }
     if (handler.check) {

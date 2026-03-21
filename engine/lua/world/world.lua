@@ -45,6 +45,16 @@ local objects = {
         handlers    = {},
     },
 
+    copper_key = {
+        name        = "copper key",
+        aliases     = { "key" },
+        adjectives  = { "copper", "small" },
+        description = "A small copper key. Simpler in design than you'd expect.",
+        location    = "player_quarters",
+        portable    = true,
+        handlers    = {},
+    },
+
     writing_desk = {
         name        = "writing desk",
         aliases     = { "desk" },
@@ -53,6 +63,18 @@ local objects = {
                       "faint ring left by some long-gone cup.",
         location    = "player_quarters",
         portable    = false,
+        handlers    = {},
+    },
+
+    chest = {
+        name        = "small chest",
+        aliases     = { "chest" },
+        adjectives  = { "small", "wooden" },
+        description = "A small wooden chest secured with an iron lock.",
+        location    = "player_quarters",
+        portable    = false,
+        locked      = true,
+        lockKey     = "iron_key",
         handlers    = {},
     },
 }
@@ -83,8 +105,23 @@ local rooms = {
             end
             return "Your quarters. The writing desk, the lamp, the key."
         end,
-        exits    = {},
-        objects  = { "iron_key", "oil_lamp", "writing_desk" },
+        exits    = { north = "entrance_passage" },
+        objects  = { "iron_key", "copper_key", "oil_lamp", "writing_desk", "chest" },
+        handlers = {},
+        visited  = false,
+    },
+
+    entrance_passage = {
+        name = "Entrance Passage",
+        description = function(self, ctx)
+            if not self.visited then
+                return "A narrow stone passage leads away from your quarters. " ..
+                       "Bare walls, bare floor. The way back is to the south."
+            end
+            return "The entrance passage. Bare stone."
+        end,
+        exits    = { south = "player_quarters" },
+        objects  = {},
         handlers = {},
         visited  = false,
     },
@@ -167,10 +204,19 @@ function World.reset()
     for _, room in pairs(rooms) do
         room.visited = false
     end
-    objects.iron_key.location    = "player_quarters"
-    objects.oil_lamp.location    = "player_quarters"
+    objects.iron_key.location     = "player_quarters"
+    objects.copper_key.location   = "player_quarters"
+    objects.oil_lamp.location     = "player_quarters"
     objects.writing_desk.location = "player_quarters"
+    objects.chest.location        = "player_quarters"
+    objects.chest.locked          = true
     currentRoomKey = "player_quarters"
+end
+
+-- Moves the player to a new room.
+-- Called by the go handler. Does not print anything.
+function World.moveTo(roomKey)
+    currentRoomKey = roomKey
 end
 
 -- Moves an object to a new location.

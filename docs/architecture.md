@@ -1164,3 +1164,317 @@ The following architectural patterns are derived from TADS 3 adv3, reviewed agai
 
 *End of architecture reference.*
 *Update this document when engine decisions change. Do not let it drift from the implementation.*
+
+---
+
+## 18. Changes After Analysis of TADS 3 / adv3Lite
+
+These changes were identified by cross-referencing this architecture against
+`docs/tads3-adv3lite-reference.md`, compiled from official adv3Lite documentation
+and live source pages. Each change is fully explained so it can be applied to
+the codebase step by step. These corrections are incorporated in full in
+`docs/architecture_v2.md`.
+
+---
+
+### Change 1 — Section 5.2: Verify result types are incomplete
+
+**What was here:** Section 5.2 defined only three verify result types:
+`logical`, `illogical`, and `nonObvious`.
+
+**What the reference reveals:** adv3Lite defines a full ranked hierarchy. The
+ranks matter during disambiguation: the resolver picks the highest-ranked
+candidate. Equal ranks cause a clarification question.
+
+| Result | Rank | Blocks? | Meaning |
+|---|---|---|---|
+| `logical` | 100 | No | No objection; default |
+| `logicalRank(n)` | n | No | Custom preference; 150 = especially good fit |
+| `dangerous` | 90 | No* | Allow explicit command; block implicit/auto-select |
+| `illogicalAlready` | 40 | Yes | Action already done ("already carrying that") |
+| `illogicalNow` | 40 | Yes | Currently impossible due to state ("lamp already lit") |
+| `illogical` | 30 | Yes | Inherently wrong at all times ("can't take a wall") |
+| `nonObvious` | 30 | No* | Allow explicit command; block implicit/auto-select |
+
+*`dangerous` and `nonObvious` allow the action when explicitly commanded but
+prevent it from being auto-selected during disambiguation.
+
+**Why it matters for the codebase:**
+
+`illogicalAlready` (rank 40) and `illogical` (rank 30) are not
+interchangeable. If a player types TAKE KEY and there's a key already in
+inventory (illogicalAlready) and a fixed wall bracket also named "bracket"
+that matches "key" (illogical), the resolver must know to prefer the
+inventory item as the better (less impossible) candidate. Using `illogical`
+for "already carrying that" breaks this comparison.
+
+`illogicalNow` is for state-dependent blocks: a door already open, a lamp
+already lit. These are temporary impossibilities, not permanent ones. They
+rank the same as `illogicalAlready` (40), both above `illogical` (30).
+
+**Required dispatcher change:** `Dispatcher.runCycle` currently only checks
+`result.illogical`. It must block on all three blocking result types and
+extract the message from whichever field is set.
+
+**Updated verify result types:**
+
+```lua
+-- Lua
+{ logical = true }                        -- rank 100; no objection
+{ logical = true, rank = 150 }            -- custom rank; preferred candidate
+{ dangerous = true }                      -- rank 90; explicit OK, no auto-select
+{ illogicalAlready = "msg" }              -- rank 40; action already accomplished
+{ illogicalNow = "msg" }                  -- rank 40; currently impossible
+{ illogical = "msg" }                     -- rank 30; inherently impossible
+{ nonObvious = true }                     -- rank 30; explicit OK, no auto-select
+```
+
+```typescript
+// TypeScript
+type VerifyResult =
+    | { logical: true; rank?: number }
+    | { dangerous: true }
+    | { illogicalAlready: string }
+    | { illogicalNow: string }
+    | { illogical: string }
+    | { nonObvious: true }
+```
+
+**Resolver scoring helper:** When ranking candidates, the resolver must map
+result types to numeric ranks. Add a `verifyRank(result)` helper:
+
+```lua
+local function verifyRank(result)
+    if not result                  then return 100 end
+    if result.logical              then return result.rank or 100 end
+    if result.dangerous            then return 90  end
+    if result.illogicalAlready     then return 40  end
+    if result.illogicalNow         then return 40  end
+    if result.illogical            then return 30  end
+    if result.nonObvious           then return 30  end
+    return 100
+end
+```
+
+---
+
+### Change 2 — Section 6.2: `fixed` property missing from object schema
+
+**What was here:** Section 6.2 documented only `portable` as a portability
+property on objects.
+
+**What the reference reveals:** Two distinct properties with distinct failure
+phases are needed:
+
+- `fixed = true` — The object is obviously, inherently part of the room (a
+  wall fixture, a built-in shelf, the floor itself). Fails at **verify** with
+  `{ illogical = "..." }`. The resolver excludes fixed objects as candidates
+  during disambiguation — the player would obviously not mean these. Equivalent
+  to adv3Lite's `isFixed = true`.
+
+- `portable = false` — The object looks moveable but isn't (heavy furniture, a
+  boulder). Fails at **check** with an explanation string. The resolver *does*
+  consider these as disambiguation candidates (the player would logically try),
+  but the action is blocked with an explanation after resolution.
+
+**Why the distinction matters:** A player types TAKE DESK in a room with a
+writing desk (`portable = false`) and a mounted wall torch (`fixed = true`).
+The resolver scores both: desk → logical (100), torch → illogical (30). The
+resolver auto-resolves to the desk, then check() blocks: "The desk is far too
+heavy to lift." The player gets a sensible response. Without `fixed`, both
+objects would survive into disambiguation and the player might be asked
+"which do you mean?" — obviously wrong.
+
+**Schema addition to section 6.2:**
+
+```lua
+objects["wall_torch"] = {
+    fixed    = true,     -- verify: { illogical = "That's part of the wall." }
+    portable = nil,      -- not needed when fixed = true
+    ...
+}
+
+objects["writing_desk"] = {
+    fixed    = nil,      -- not fixed: player would logically try to take it
+    portable = false,    -- check: "The desk is far too heavy to lift."
+    ...
+}
+-- If neither fixed nor portable = false: object is fully portable (default)
+```
+
+---
+
+### Change 3 — Sections 8.6 and 14: Handler examples use wrong phase for `portable`
+
+**What was here:** Both the handler registry example (§8.6) and the default
+handler example (§14) showed the `take` handler checking `obj.portable` inside
+`verify()`, and wrote `obj.location = "inventory"` directly in the action phase.
+
+**What is wrong:**
+
+1. `portable = false` must fail at **check**, not verify. Putting it in verify
+   causes the resolver to silently exclude heavy-but-logical objects from
+   disambiguation, breaking the intended behaviour described in Change 2.
+
+2. `obj.location = "inventory"` written directly bypasses the world API.
+   Must use `World.moveObject(obj, "inventory")`.
+
+**Corrected take handler:**
+
+```lua
+Defaults["take"] = {
+    verify = function(obj, intent)
+        if not obj   then return { illogical = "You don't see that here." } end
+        if obj.fixed then return { illogical = "That's part of the room." } end
+        if obj.location == "inventory" then
+            return { illogicalAlready = "You're already carrying that." }
+        end
+        return { logical = true }
+    end,
+
+    check = function(obj, intent)
+        if obj.portable == false then
+            return "That's not something you can pick up."
+        end
+    end,
+
+    action = function(obj, intent)
+        World.moveObject(obj, "inventory")
+        return "Taken."
+    end,
+}
+```
+
+This also applies to the handler registry example in §8.6: the `propertyCheck`
+condition for `portable` in verify must move to a check-phase condition, and the
+`fixed` property is what belongs in verify.
+
+---
+
+### Change 4 — Section 5.1: check() described as "reads only" — too strict
+
+**What was here:** The phase table entry for check() said "No (reads only)" in
+the "May modify state?" column.
+
+**What the reference clarifies:** check() must not change **world state** — it
+must not move objects, change flags that affect other systems, or modify the
+game world. However, it *may* set **tracking flags** that record player
+behaviour, such as `attempted_open = true` or `tried_unlock_count = n`. These
+are diagnostic/narrative flags, not world-state changes.
+
+**Updated check() entry:** "Must not change world state. May set tracking flags
+(e.g. `obj.attemptedTake = true`)."
+
+---
+
+### Change 5 — Section 4.4: verify() two-pass structure not explicit; nil-ref foot-gun
+
+**What was here:** Section 4.4 implied that verify() is called during
+resolution and again in the dispatcher, but did not make the two-pass structure
+explicit.
+
+**What the reference clarifies:** verify() runs *exactly twice* when
+disambiguation occurs:
+
+1. **Resolver pass** — called on every candidate for a noun phrase, to score
+   and rank them. The highest-ranked candidate is auto-selected, or if scores
+   are tied, a clarification question is emitted.
+
+2. **Dispatcher pass** — called again on the winning object inside `runCycle`,
+   as a final gate. If verify fails here, the failure message is shown. (This
+   second pass is needed because verify could fail unconditionally, not just
+   comparatively.)
+
+**The critical foot-gun:** During the **resolver pass**, when scoring candidates
+for one noun phrase, the other noun phrase may not yet be resolved. If
+`resolveFirst = "iobj"`, then when verify() is called on iobj candidates,
+`intent.dobjRef` is `nil`. A verify function that reads `intent.dobjRef` will
+get nil and may produce wrong results or errors.
+
+**Rule to add to section 4.4:**
+
+> Verify functions must base their decision only on properties of their own
+> object and on global state (State flags, World queries). They must never read
+> `intent.dobjRef` or `intent.iobjRef` — the other object's reference is not
+> guaranteed to be set when verify() is called during the resolver pass.
+
+---
+
+### Change 6 — Section 4.5: Auto-resolve parenthetical announcement missing from FSM
+
+**What was here:** The disambiguation FSM described FAIL_AMBIGUOUS and
+FAIL_NOT_FOUND but did not describe what happens when the resolver
+auto-selects a winner.
+
+**What is missing:** When the resolver auto-resolves (one candidate has a
+uniquely highest verify rank), the engine should print which object was chosen,
+as a parenthetical before the action output:
+
+```
+> take key
+(the iron key)
+Taken.
+```
+
+This is the adv3 pattern. Without it, the player can't tell which object was
+selected when multiple candidates existed. The parenthetical fires only if more
+than one candidate was scored — if only one candidate matched at all, no
+announcement is needed.
+
+**FSM addition:**
+
+```
+On AUTO-RESOLVE (one candidate has uniquely highest verify rank,
+                 and N > 1 candidates were scored):
+  1. Prepend "(the [object.name])" to the output
+  2. Assign resolved object to intent.dobjRef / intent.iobjRef
+  3. Remain in NORMAL state
+  4. Continue to dispatch
+```
+
+The parenthetical string should be formatted as `"(the " .. obj.name .. ")"` and
+emitted by the resolver, returned alongside the resolved object so the
+dispatcher can prepend it to the action output.
+
+---
+
+### Change 7 — Section 5.5: Two-object handler dispatch is unaddressed
+
+**What was here:** Section 5.5 showed the dispatcher calling `runCycle` only on
+`intent.dobjRef`'s handler. No mention of the iobj handler.
+
+**What adv3Lite does:** Both objects in a two-object command have independent
+`dobjFor` and `iobjFor` handler chains, each with their own verify/check/action.
+
+**Our design decision — deliberate simplification:** We do not implement split
+dobj/iobj handler chains. For two-object verbs, the **dobj's handler is the
+sole authority** for the full action cycle. It receives the complete resolved
+`intent` including `intent.iobjRef`, which it inspects as needed.
+
+The iobj's `handlers[verb]` table is consulted by the **resolver** during
+disambiguation scoring (verify() is called on iobj candidates), but it is
+**not** called by the dispatcher's `runCycle`. Once the iobj is resolved,
+its handler is not further invoked.
+
+**Rationale:** Split chains add significant complexity for minimal gain in this
+game's scope. The dobj handler can read `intent.iobjRef` directly and produce
+the appropriate response.
+
+**For `PUT X IN Y` specifically:**
+- Resolver scores iobj candidates using `candidate.handlers["put"].verify()`
+  to find the best container. Then scores dobj candidates.
+- Dispatcher calls only `dobjRef.handlers["put"]` (or the default PUT handler).
+  That handler uses `intent.iobjRef` to know the target container.
+- The container (iobj) does not get a separate runCycle call.
+
+**If iobj-level check logic is needed:** the dobj's action function can
+manually call `intent.iobjRef.handlers.put` or a named function. This is
+explicit delegation, not automatic dispatch.
+
+This decision should be revisited if a future verb genuinely requires iobj-side
+check logic that cannot be expressed in the dobj handler.
+
+---
+
+*These changes are fully incorporated in `docs/architecture_v2.md`.*
+*Use each numbered change above as a prompt to update the corresponding code.*

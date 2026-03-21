@@ -10,7 +10,8 @@
 --   4. Nothing found            -> "You can't do that."
 --
 -- The three phases must never be collapsed (see CLAUDE.md absolute rules).
--- verify() is read-only. check() is read-only. action() may modify state.
+-- verify() must not modify state. check() must not change world state; may set
+-- tracking flags on the object. action() may modify state.
 
 local World    = require("engine.lua.world.world")
 local Defaults = require("engine.lua.world.defaults")
@@ -23,8 +24,9 @@ local Dispatcher = {}
 -- Runs verify -> check -> action on a handler table.
 -- Any phase is optional — if a handler omits verify() or check(), we skip it.
 --
--- verify() returns a result table. If result.illogical is set, we stop
--- and return that message. Otherwise we continue.
+-- verify() returns a result table. Blocking result types are:
+--   illogical, illogicalAlready, illogicalNow — each carries a message string.
+-- Non-blocking types: logical, dangerous, nonObvious.
 --
 -- check() returns a string to block, or nil to allow.
 --
@@ -32,17 +34,18 @@ local Dispatcher = {}
 -- ---------------------------------------------------------------------------
 function Dispatcher.runCycle(handler, obj, intent)
     -- Phase 1: verify
-    -- Read-only. May be called multiple times (during disambiguation).
-    -- If it returns illogical, the action is blocked.
+    -- Must not modify state. May be called multiple times (during disambiguation).
+    -- Blocks on illogical, illogicalAlready, or illogicalNow.
     if handler.verify then
         local result = handler.verify(obj, intent)
-        if result and result.illogical then
-            return result.illogical
+        if result then
+            local msg = result.illogical or result.illogicalAlready or result.illogicalNow
+            if msg then return msg end
         end
     end
 
     -- Phase 2: check
-    -- Read-only. Called after objects are fully resolved.
+    -- Must not change world state. May set tracking flags on the object.
     -- Returns a string to block, or nil to allow.
     if handler.check then
         local block = handler.check(obj, intent)

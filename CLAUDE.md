@@ -19,7 +19,10 @@ requirements in mind. More information about the specific game can be found in
 
 ## Architecture
 
-Full specification in `docs/architecture.md`.
+Full specification in `docs/architecture_v2.md` (canonical).
+`docs/architecture.md` is preserved as v1 with a change log in Section 18.
+`docs/tads3-adv3lite-reference.md` contains detailed research notes on the
+TADS 3 / adv3Lite system that informed these decisions.
 This section summarises the decisions most likely to affect Claude Code's work.
 
 ### Layer diagram
@@ -52,7 +55,9 @@ This section summarises the decisions most likely to affect Claude Code's work.
 ├── main.lua               LÖVE2D entry point (runs tests in M1a; full game in M2)
 ├── docs/
 │   ├── diversion-brief.md
-│   └── architecture.md
+│   ├── architecture.md         v1 — preserved, with change log in Section 18
+│   ├── architecture_v2.md      canonical — use this for implementation
+│   └── tads3-adv3lite-reference.md  research notes; source for M1b decisions
 ├── engine/
 │   ├── lua/
 │   │   ├── GUIDE.md
@@ -115,10 +120,13 @@ Everything above the loader is identical in logic, different only in syntax.
 JSON files are pure data. Logic lives in the engine's handler registry,
 referenced by name from the data files. No eval, no embedded scripts.
 
-### 2. verify() must never modify game state
-Called multiple times per turn during object resolution. Side effects will
-fire at the wrong time or too many times. verify() may only read state and
-return a result table / object.
+### 2. verify() must never modify game state or read the other object's ref
+verify() is called twice per command: once in the resolver (scoring all
+candidates for disambiguation) and once in the dispatcher (final gate).
+During the resolver pass, the other noun phrase may not yet be resolved —
+intent.dobjRef or intent.iobjRef will be nil. verify() must base its result
+only on properties of its own object and global state (State flags, World
+queries). Never read intent.dobjRef or intent.iobjRef inside verify().
 
 ### 3. Handlers return strings; they never print or console.log
 All output flows upward to the terminal layer. Game logic is testable
@@ -127,10 +135,12 @@ without any runtime (LÖVE2D or browser) running.
 ### 4. The three phases must not be collapsed
 verify(), check(), and action() are distinct phases with distinct purposes:
 - verify(): is this logical from the player's perspective? Used for
-  disambiguation. Must not modify state.
+  disambiguation scoring. Must not modify state or read other-object refs.
 - check(): can this proceed given conditions the player couldn't know?
-  Called after objects are resolved. May block with explanation.
-- action(): execute the effect, return output string.
+  Called after objects are resolved. Must not change world state; may set
+  tracking flags on the object (e.g. self.attemptedOpen = true).
+- action(): execute the effect, return output string. Use World.moveObject()
+  for all object moves — never write obj.location directly.
 
 ### 5. Room descriptions are functions, not strings
 Descriptions take a context argument (at minimum: lit state, period state)
@@ -196,6 +206,24 @@ This is configurable per canonical verb in the lexicon. Do not hardcode.
 
 ---
 
+## Two-object handler dispatch
+
+For two-object verbs (PUT X IN Y), the dispatcher calls runCycle only on the
+**dobj's handler**. The iobj's handler is consulted by the **resolver** during
+disambiguation scoring (verify() is called on iobj candidates to rank them),
+but once both objects are resolved, the iobj's handler is not further invoked
+by the dispatcher.
+
+The dobj's handler receives the full intent including intent.iobjRef and is
+responsible for the complete action logic. This is a deliberate simplification
+from adv3Lite's split dobjFor/iobjFor chains — sufficient for this game's scope.
+
+If an iobj genuinely needs to interject at check time, the dobj's action can
+manually delegate to intent.iobjRef.handlers[verb]. This is explicit delegation,
+not automatic dispatch.
+
+---
+
 ## resolveObj flag
 
 Some verbs do not resolve to in-scope objects at all:
@@ -212,11 +240,42 @@ from the verb's lexicon entry.
 
 ---
 
+## verify() result types
+
+verify() returns one of these result tables. The resolver uses the rank to
+score candidates. Higher rank = more preferred. All blocking types (Blocks=yes)
+also stop the action in the dispatcher's second-pass check.
+
+| Result | Rank | Blocks? | Use case |
+|---|---|---|---|
+| `{ logical = true }` | 100 | No | Default; no objection |
+| `{ logical = true, rank = n }` | n | No | Fine-tune; 150 = especially good fit |
+| `{ dangerous = true }` | 90 | No | Allow explicit; block auto-select (airlock) |
+| `{ illogicalAlready = "msg" }` | 40 | Yes | Already done ("already carrying that") |
+| `{ illogicalNow = "msg" }` | 40 | Yes | Currently impossible ("lamp already lit") |
+| `{ illogical = "msg" }` | 30 | Yes | Inherently wrong always ("can't take a wall") |
+| `{ nonObvious = true }` | 30 | No | Allow explicit; block auto-select (puzzle) |
+
+Use `fixed = true` on objects to produce `{ illogical = ... }` (rank 30) at verify.
+Use `portable = false` to produce a check() failure (not a verify failure).
+Use `illogicalAlready` (not `illogical`) when the action has already been done.
+
+The resolver needs a `verifyRank(result)` helper that maps these to numbers.
+The dispatcher's runCycle must block on illogical, illogicalAlready, AND
+illogicalNow — extracting the message from whichever field is set.
+
+---
+
 ## The disambiguation state machine
 
 States: NORMAL, AWAIT_CLARIFY
 
-On FAIL_AMBIGUOUS from resolver:
+On AUTO-RESOLVE (one candidate has uniquely highest verify rank, N>1 scored):
+  - Prepend "(the [object.name])" to the output
+  - Assign object to intent ref, remain in NORMAL, continue to dispatch
+  - No announcement if only one candidate matched in the first place
+
+On FAIL_AMBIGUOUS (top-ranked candidates are tied):
   - Store partial intent and candidate list
   - Transition to AWAIT_CLARIFY
   - Emit clarification question with candidate names
@@ -306,22 +365,169 @@ Do not build in Milestone 1a:
 
 Goal: disambiguation and the full default handler set.
 
-- [ ] verify() scoring in resolver
-- [ ] Disambiguation FSM (NORMAL / AWAIT_CLARIFY)
-- [ ] Indirect object resolution (resolveFirst per verb)
-- [ ] Default handlers: take, drop, go
-- [ ] Extended tests covering disambiguation and two-object verbs
-- [ ] TypeScript port of all of the above
+- [x] verify() scoring in resolver
+- [x] Disambiguation FSM (NORMAL / AWAIT_CLARIFY)
+- [x] Indirect object resolution (resolveFirst per verb)
+- [x] Default handlers: take, drop, go
+- [x] Extended tests covering disambiguation (34 passing)
+- [x] TypeScript port of all of the above
+- [x] Extended tests for two-object verbs (put, unlock, lock)
+
+### M1b implementation notes
+
+**Pre-M1b fixes applied to existing code:**
+- `dispatcher.lua` / `dispatcher.ts` — blocking logic now checks all three
+  message-carrying verify result types: `illogical`, `illogicalAlready`,
+  `illogicalNow`. Previously only `illogical` was checked.
+- `types.ts` — `VerifyResult` union expanded with `dangerous`, `illogicalAlready`,
+  `illogicalNow`. `fixed?: boolean` added to `GameObject`.
+- `dispatcher.lua` comment corrected: check() may set tracking flags on the
+  object but must not change world state.
+
+**Resolver changes:**
+- `verifyRank()` helper added and exposed as `Resolver.verifyRank` (also exported
+  from TypeScript resolver). Maps verify result types to numeric ranks.
+- `Resolver.filterCandidates(wordList, candidates)` exposed for use in
+  `handleClarification`. Runs the same adjective+noun matching as the resolver
+  but restricted to a specific candidate list (avoids re-querying scope).
+- `resolveNounPhrase` now scores multiple candidates with verify() and either
+  auto-resolves (unique highest rank) or returns FAIL_AMBIGUOUS (tied).
+
+**Disambiguation FSM (init.lua / index.ts):**
+- `Parser.reset()` / `reset()` added — resets FSM state to NORMAL. Must be
+  called between test runs (alongside `World.reset()`).
+- Clarification matching uses `Resolver.filterCandidates` with stopword
+  stripping, not just last-token noun matching. This ensures "copper key"
+  correctly selects copper_key over iron_key.
+- Auto-resolve prepends `(the [name])` only when N>1 candidates were scored.
+  No prefix when a single candidate matched in the first place.
+
+**World stub additions:**
+- `copper_key` added as a second key (alias "key") to enable disambiguation
+  tests. It is a stub object only — not part of the actual game content.
+- `entrance_passage` room added with exits north/south to `player_quarters`.
+- `World.moveTo(roomKey)` added (used by go handler).
+- `chest` added: `portable=false`, `locked=true`, `lockKey="iron_key"`.
+  Stub object for testing lock/unlock. Not game content.
+- `locked?: bool` and `lockKey?: string` added to `GameObject` (types.ts).
+
+**Additional handlers (post-M1b):**
+- `put` — verify: dobj must be in inventory. Action: moves dobj to current
+  room, returns "You put the X on/in the Y." using intent.prep. Full
+  container placement (dobj inside iobj) deferred to Milestone 3.
+- `unlock` / `lock` — verify: object must be lockable (locked != nil) and
+  in the correct state. Check: `World.getObject(obj.lockKey) ~= intent.iobjRef`
+  (identity comparison — no key property needed on objects). Action: toggles
+  `obj.locked`.
+
+**Direction verbs:**
+- Each direction is its own canonical verb (`north`, `south`, `east`, `west`,
+  `up`, `down`, `in`, `out`) with single-letter abbreviation synonyms where
+  applicable (`n`, `s`, `e`, `w`, `u`, `d`).
+- The go handler is registered under all direction names as well as "go".
+- Direction source: `intent.dobjWords[1]` (for "go north") or `intent.verb`
+  when verb is not "go" (for bare "north"). The handler checks
+  `intent.verb ~= "go"` before falling back to `intent.verb`.
+- `in` as a direction works safely — the tagger only scans `rest` (tokens
+  after the verb) for prepositions, never `tokens[1]`.
+
+**Verb set additions:**
+- `lock` added alongside `unlock` (two-object, resolveFirst="dobj").
+- `wait` (synonyms: wait, z), `help` (synonyms: help, ?), `quit` (synonyms:
+  quit, q) added. Handlers to be implemented in Milestone 2 (terminal layer).
+- Total canonical verbs: 25.
+
+### M1b design notes — take, drop, go handlers
+
+Researched against TADS 3 adv3 documentation. Key decisions:
+
+**Object portability — two distinct properties, two distinct failure phases:**
+
+- `fixed = true` on an object → fail at **verify** with `illogical`.
+  For objects obviously part of the room (a wall, a built-in shelf).
+  The resolver should never consider these as candidates during disambiguation.
+
+- `portable = false` on an object → fail at **check**.
+  For objects that look moveable but aren't (heavy furniture, etc.).
+  These rank logically during disambiguation so the parser picks the right
+  object, then block with an explanation at check.
+
+The writing desk in the world stub is correctly `portable = false` (check
+failure). It is not `fixed` — a player would logically try to take a desk.
+
+**"Already held" → `illogicalAlready` at verify, not check.**
+If the object is already in inventory, verify returns `{ illogicalAlready = "..." }`
+(rank 40). This steers disambiguation away from already-held items while ranking
+them above truly fixed objects (illogical, rank 30).
+
+**take handler phases:**
+- verify: if obj.fixed → { illogical = "..." }; if already in inventory →
+  { illogicalAlready = "..." }; else → { logical = true }
+- check: if obj.portable == false → return blocking string
+- action: World.moveObject(obj, "inventory"); return "Taken."
+
+**drop handler phases:**
+- verify: obj must be in inventory (illogical if not holding it)
+- action: World.moveObject(obj, World.currentRoomKey()); return "Dropped."
+- Note: TADS has a dropLocation concept (items may not land in the room itself
+  if the player is inside a nested location/vehicle). Defer to Milestone 3.
+
+**go handler:**
+- resolveObj = false; direction word is in intent.dobjWords, not a resolved object.
+- action: look up direction in room.exits; handle string (room key) or function
+  (per CLAUDE.md Rule 6); return describeCurrentRoom() on success.
+- Requires new World.moveTo(roomKey) function.
+- beforeTravel/afterTravel notifications: defer to Milestone 3.
+- Darkness blocking travel: defer to Milestone 2/3.
 
 ---
 
 ## Milestone 2 — LÖVE2D terminal (Lua only)
 
-- [ ] Terminal shell: scrolling buffer, input line, command history
-- [ ] LÖVE2D main.lua wiring
-- [ ] Colour scheme (see architecture doc)
-- [ ] Room description rendering (calls description as function)
-- [ ] love.filesystem save/load stub
+- [x] Terminal shell: scrolling buffer, input line, command history
+- [x] LÖVE2D main.lua wiring
+- [x] Colour scheme (see architecture doc)
+- [x] Room description rendering (calls description as function)
+- [ ] love.filesystem save/load stub — deferred to Milestone 3
+
+### M2 implementation notes
+
+**`engine/lua/terminal.lua`** — full LÖVE2D terminal.
+- `Terminal.init()` — loads font, sets window title, resets world, shows starting room.
+- `Terminal.submit(raw)` — echoes command, resets scrollOffset to 0, calls
+  `Parser.process()`, applies colour heuristics to output.
+- `Terminal.keypressed(key)` — Enter, Backspace, Up/Down (history), PageUp/PageDown,
+  Home, End, Ctrl+V (paste).
+- `Terminal.textinput(t)` — appends typed character.
+- `Terminal.wheelmoved(_, dy)` — dy > 0 = wheel up = scroll toward older content.
+- `Terminal.updateCursor(dt)` — 0.5s blink cycle.
+- `Terminal.draw()` — background, word-wrapped output lines, scrollbar, input line,
+  blinking cursor.
+
+**Room title colour heuristic:** if parser output contains a newline and the first
+line is ≤ 40 chars with no sentence-ending punctuation, the first line is coloured
+`roomTitle` and the rest `response`. Replaced by typed response objects in M3.
+
+**Rendered-line cache:** `font:getWrap()` is called once per buffer change or window
+resize, not every frame. Cache is invalidated via `renderDirty` flag set by `pushLine`.
+
+**Scrollbar:** 4px track on the right edge of the output area, only visible when
+content exceeds the viewport. Thumb position and height are proportional.
+
+**`test` meta-command:** intercepted before the parser. Calls `runTests(printFn)`
+from `test/parser_test.lua` with a colour-routing print function (PASS→system,
+FAIL→error, headers→narrator, summary→error if failures). After the run, calls
+`World.reset()`, `Parser.reset()`, and re-describes the starting room.
+
+**`quit` / `q` meta-command:** intercepted before the parser. Calls
+`love.event.push("quit")` after printing "Goodbye." so the final frame is drawn.
+
+**`test/parser_test.lua`** — `run()` now accepts an optional `printFn` argument
+(defaults to Lua's built-in `print`). Headless CLI behaviour unchanged.
+
+**`world/defaults.lua` / `defaults.ts`** — `wait`, `help`, `quit` handlers added.
+`wait` returns "Time passes.". `help` returns a command list. `quit` returns
+"Goodbye." (fallback for headless/browser contexts; LÖVE2D terminal intercepts it).
 
 ---
 

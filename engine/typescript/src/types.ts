@@ -12,7 +12,10 @@ export interface GameObject {
     adjectives:  string[]
     description: string | ((self: GameObject, ctx: WorldContext) => string)
     location:    string | null
+    fixed?:      boolean
     portable:    boolean
+    locked?:     boolean
+    lockKey?:    string
     handlers:    Record<string, Handler>
 }
 
@@ -27,6 +30,9 @@ export interface Room {
 
 export type VerifyResult =
     | { logical: true; rank?: number }
+    | { dangerous: true }
+    | { illogicalAlready: string }
+    | { illogicalNow: string }
     | { illogical: string }
     | { nonObvious: true }
 

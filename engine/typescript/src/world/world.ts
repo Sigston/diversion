@@ -9,9 +9,11 @@ import type { GameObject, Room, WorldContext } from '../types.ts'
 interface ObjectStore { [key: string]: GameObject }
 
 const initialLocations: Record<string, string> = {
-    iron_key:    'player_quarters',
-    oil_lamp:    'player_quarters',
+    iron_key:     'player_quarters',
+    copper_key:   'player_quarters',
+    oil_lamp:     'player_quarters',
     writing_desk: 'player_quarters',
+    chest:        'player_quarters',
 }
 
 const objects: ObjectStore = {
@@ -20,6 +22,15 @@ const objects: ObjectStore = {
         aliases:     ['key'],
         adjectives:  ['iron', 'old', 'small'],
         description: 'A small iron key. The bow is cast in the shape of a hare.',
+        location:    'player_quarters',
+        portable:    true,
+        handlers:    {},
+    },
+    copper_key: {
+        name:        'copper key',
+        aliases:     ['key'],
+        adjectives:  ['copper', 'small'],
+        description: "A small copper key. Simpler in design than you'd expect.",
         location:    'player_quarters',
         portable:    true,
         handlers:    {},
@@ -43,6 +54,17 @@ const objects: ObjectStore = {
         portable:    false,
         handlers:    {},
     },
+    chest: {
+        name:        'small chest',
+        aliases:     ['chest'],
+        adjectives:  ['small', 'wooden'],
+        description: 'A small wooden chest secured with an iron lock.',
+        location:    'player_quarters',
+        portable:    false,
+        locked:      true,
+        lockKey:     'iron_key',
+        handlers:    {},
+    },
 }
 
 // ---------------------------------------------------------------------------
@@ -61,8 +83,23 @@ const rooms: Record<string, Room> = {
             }
             return 'Your quarters. The writing desk, the lamp, the key.'
         },
-        exits:    {},
-        objects:  ['iron_key', 'oil_lamp', 'writing_desk'],
+        exits:    { north: 'entrance_passage' },
+        objects:  ['iron_key', 'copper_key', 'oil_lamp', 'writing_desk', 'chest'],
+        handlers: {},
+        visited:  false,
+    },
+
+    entrance_passage: {
+        name: 'Entrance Passage',
+        description(self, _ctx) {
+            if (!self.visited) {
+                return 'A narrow stone passage leads away from your quarters. ' +
+                       'Bare walls, bare floor. The way back is to the south.'
+            }
+            return 'The entrance passage. Bare stone.'
+        },
+        exits:    { south: 'player_quarters' },
+        objects:  [],
         handlers: {},
         visited:  false,
     },
@@ -120,6 +157,10 @@ export const World = {
         return 'You are carrying: ' + carried.join(', ') + '.'
     },
 
+    moveTo(roomKey: string): void {
+        currentRoomKey = roomKey
+    },
+
     moveObject(obj: GameObject, location: string | null): void {
         obj.location = location
     },
@@ -135,6 +176,7 @@ export const World = {
         for (const [key, loc] of Object.entries(initialLocations)) {
             objects[key].location = loc
         }
+        objects.chest.locked = true
         currentRoomKey = 'player_quarters'
     },
 }

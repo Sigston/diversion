@@ -21,6 +21,9 @@ feedback, and headless testing without needing a browser.
 
 ```
 engine/lua/
+├── terminal.lua            LÖVE2D terminal UI: scrolling buffer, input line,
+│                           command history, colour output, mouse/keyboard scroll.
+│                           Meta-commands: test (inline test runner), quit.
 ├── lexicon/
 │   ├── verbs.lua           Verb table: synonyms, resolveObj, resolveFirst.
 │   │                       Also builds synonymMap (word -> canonical verb).
@@ -34,17 +37,18 @@ engine/lua/
 │   └── init.lua            Entry point: Parser.process(rawInput) chains all stages
 ├── world/
 │   ├── world.lua           World model: rooms, objects, scope, inventory
-│   ├── defaults.lua        Default verb handlers (examine, look, inventory)
-│   ├── state.lua           Global state flags — stub, built in Milestone 1b/2
-│   └── terminal.lua        LÖVE2D terminal UI — stub, built in Milestone 2
+│   ├── defaults.lua        Default verb handlers (examine, look, inventory, take,
+│   │                       drop, go/directions, put, unlock, lock, wait, help, quit)
+│   ├── state.lua           Global state flags — stub, built in Milestone 3
+│   └── terminal.lua        (empty — terminal is at engine/lua/terminal.lua)
 └── loader.lua              JSON loader — stub, built in Milestone 3
 ```
 
 Also at the project root:
 
 ```
-main.lua                    LÖVE2D entry point (currently runs tests on load)
-test/parser_test.lua        Headless test suite (12 tests, all passing)
+main.lua                    LÖVE2D entry point — wires terminal to love callbacks
+test/parser_test.lua        Headless test suite (49 tests, all passing)
 ```
 
 ---
@@ -87,11 +91,15 @@ CommandIntent table, which is defined in `CLAUDE.md`.
 Every verb handler goes through three phases. All three phases are always run
 in order — they must never be collapsed into one.
 
-**`verify(obj, intent)`** — read-only. Is this action logically possible?
-Used during disambiguation. Return `{ illogical = "message" }` to block.
+**`verify(obj, intent)`** — must not modify state. Is this action logically
+possible? Used during disambiguation scoring. Blocking result types:
+`{ illogical = "msg" }`, `{ illogicalAlready = "msg" }`, `{ illogicalNow = "msg" }`.
+Non-blocking: `{ logical = true }`, `{ dangerous = true }`, `{ nonObvious = true }`.
+See `Resolver.verifyRank()` for the numeric ranks used for scoring.
 
-**`check(obj, intent)`** — read-only. Can this proceed given conditions the
-player couldn't anticipate? Return a string to block, or `nil` to allow.
+**`check(obj, intent)`** — must not change world state; may set tracking flags
+on the object (e.g. `self.attemptedOpen = true`). Called after objects are fully
+resolved. Return a string to block, or `nil` to allow.
 
 **`action(obj, intent)`** — the only phase that may modify game state.
 Returns the output string.
@@ -106,9 +114,13 @@ No LÖVE2D required. From the project root:
 lua test/parser_test.lua
 ```
 
-Runs 12 tests covering empty input, unrecognised verbs, look, inventory, and
-examine (including synonyms, adjectives, and not-found cases). Exits with
-code 1 if any test fails — useful for scripting.
+Runs 49 tests covering: empty input, unrecognised verbs, look, inventory,
+examine, take (including already-held and non-portable), drop, go (movement,
+blocked exits), bare direction words and abbreviations, put (two-object),
+unlock/lock (two-object, key matching, wrong key, no key, non-lockable),
+disambiguation (clarification question, clarification response, auto-resolve
+with prefix), and verifyRank unit tests. Exits with code 1 if any test fails
+— useful for scripting.
 
 All tests must pass before starting any new work in a session.
 
@@ -122,8 +134,19 @@ Open the project root in VS Code and press **F5**, or from the terminal:
 love .
 ```
 
-In Milestone 1a, this runs the parser test suite on startup and prints results
-to the LÖVE2D console. The interactive terminal is built in Milestone 2.
+Opens a full terminal UI. The starting room is described on load. Type commands
+normally. Special terminal commands (not game verbs):
+
+- `test` — runs the 49-test suite inline, with colour-coded PASS/FAIL output,
+  then resets the world and re-describes the starting room so play continues.
+- `quit` / `q` — exits LÖVE2D.
+
+**Scrolling:**
+- Mouse wheel — scroll up to see older output, down to return to latest.
+- PageUp / PageDown — scroll by one page at a time.
+- Home — jump to the top of the buffer.
+- End — jump back to the bottom.
+- Submitting any command always snaps back to the bottom.
 
 ---
 
@@ -186,6 +209,7 @@ or `objects` tables directly — they always go through the World API:
 | `World.inScope()` | Returns all objects visible to the player right now |
 | `World.describeCurrentRoom()` | Returns room title + description, marks room visited |
 | `World.describeInventory()` | Returns a string listing carried items |
+| `World.moveTo(roomKey)` | Moves the player to a different room (used by go handler) |
 | `World.moveObject(obj, location)` | Moves an object (take, drop, containers) |
 | `World.getObject(key)` | Returns an object by its key string |
 | `World.reset()` | Resets all mutable state — called at the start of every test run |
@@ -230,16 +254,27 @@ order:
 
 ---
 
-## Current state — Milestone 1a complete
+## Current state — Milestone 2 complete
 
-Parser pipeline fully implemented and tested:
-- Verb lexicon with synonyms, resolveObj, resolveFirst
-- Tokeniser, tagger, resolver, dispatcher
-- World stub: one room (Your Quarters), three objects (iron key, oil lamp, writing desk)
-- Default handlers: examine, look, inventory
-- 12 passing tests
+LÖVE2D interactive terminal running. Full parser pipeline behind it.
 
-Next milestone (1b): disambiguation, verify() scoring, take/drop/go handlers.
+**Terminal features:**
+- Scrolling output buffer (200 lines max), word-wrapped to window width
+- Command history (50 commands, arrow-key navigation)
+- Colour-coded output matching the TypeScript terminal (roomTitle, response,
+  error, system, narrator, input)
+- Room-title heuristic: first line of a go/look response coloured in roomTitle
+- Scrollbar showing position in buffer; mouse wheel + PageUp/PageDown/Home/End
+- Auto-scroll to bottom on every command submit
+- `test` meta-command: runs 49-test suite inline with colour coding, then resets
+- `quit` / `q`: exits via love.event
+
+**Default handlers:** examine, look, inventory, take, drop, go, put, unlock,
+lock, wait, help, quit (25 canonical verbs total)
+
+**World stub:** two rooms, five objects (copper_key and chest are test stubs).
+
+Next milestone (3): JSON loader and data schema.
 
 ---
 

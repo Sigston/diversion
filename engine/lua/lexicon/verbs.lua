@@ -60,10 +60,16 @@ local Verbs = {
     },
 
     unlock = {
-        synonyms    = { "unlock" },
-        resolveObj  = true,
+        synonyms     = { "unlock" },
+        resolveObj   = true,
         resolveFirst = "dobj",  -- must know what we're unlocking before
     },                          -- we can make sense of "with the key"
+
+    lock = {
+        synonyms     = { "lock" },
+        resolveObj   = true,
+        resolveFirst = "dobj",
+    },
 
     open = {
         synonyms    = { "open" },
@@ -90,9 +96,35 @@ local Verbs = {
     },
 
     search = {
-        synonyms    = { "search", "rummage" },
-        resolveObj  = true,
+        synonyms     = { "search", "rummage" },
+        resolveObj   = true,
         resolveFirst = "dobj",
+    },
+
+    -- Directions. Each is its own canonical verb so bare "north" works the
+    -- same as "go north". The go handler is registered under all of these.
+    north = { synonyms = { "north", "n" }, resolveObj = false },
+    south = { synonyms = { "south", "s" }, resolveObj = false },
+    east  = { synonyms = { "east",  "e" }, resolveObj = false },
+    west  = { synonyms = { "west",  "w" }, resolveObj = false },
+    up    = { synonyms = { "up",    "u" }, resolveObj = false },
+    down  = { synonyms = { "down",  "d" }, resolveObj = false },
+    ["in"] = { synonyms = { "in"        }, resolveObj = false },
+    out   = { synonyms = { "out"        }, resolveObj = false },
+
+    wait = {
+        synonyms   = { "wait", "z" },
+        resolveObj = false,
+    },
+
+    help = {
+        synonyms   = { "help", "?" },
+        resolveObj = false,
+    },
+
+    quit = {
+        synonyms   = { "quit", "q" },
+        resolveObj = false,
     },
 }
 

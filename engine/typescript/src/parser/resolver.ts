@@ -51,15 +51,26 @@ function matchObject(wordList: string[], candidates: GameObject[]): GameObject[]
     const noun       = wordList[wordList.length - 1]
     const adjectives = wordList.slice(0, -1)
 
-    return candidates.filter(obj => {
-        const nounMatch = obj.name.includes(noun) ||
-                          obj.aliases.some(a => a.includes(noun))
+    const nounMatches = candidates.filter(obj => {
+        // Match noun against the last word of the display name (exact match).
+        // "oil lamp" → last word "lamp"; prevents "desk" matching "desk surface".
+        const lastNameWord = obj.name.split(' ').pop()!
+        const nounMatch = lastNameWord === noun ||
+                          obj.aliases.some(a => a === noun)
         if (!nounMatch) return false
         if (adjectives.length > 0) {
             return adjectives.every(adj => obj.adjectives.includes(adj))
         }
         return true
     })
+
+    if (nounMatches.length > 0) return nounMatches
+
+    // Adjective-only fallback: if noun matching found nothing, treat all words
+    // as adjectives. Allows "iron" to select the iron key when disambiguating.
+    return candidates.filter(obj =>
+        wordList.every(word => obj.adjectives.includes(word))
+    )
 }
 
 function getVerifyResult(obj: GameObject, verb: string, intent: CommandIntent): VerifyResult | null {

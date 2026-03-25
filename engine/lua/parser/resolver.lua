@@ -71,13 +71,15 @@ local function matchObject(wordList, candidates)
 
     local matches = {}
     for _, obj in ipairs(candidates) do
-        -- Check noun against name
-        local nounMatch = obj.name:find(noun, 1, true)
+        -- Check noun against the last word of the display name (exact match).
+        -- "oil lamp" → last word "lamp"; prevents "desk" matching "desk surface".
+        local lastWord = obj.name:match("(%S+)$") or obj.name
+        local nounMatch = (lastWord == noun)
 
-        -- Check noun against aliases if name didn't match
+        -- Check noun against aliases (exact match) if name didn't match.
         if not nounMatch and obj.aliases then
             for _, alias in ipairs(obj.aliases) do
-                if alias:find(noun, 1, true) then
+                if alias == noun then
                     nounMatch = true
                     break
                 end
@@ -109,7 +111,25 @@ local function matchObject(wordList, candidates)
         end
     end
 
-    return matches
+    if #matches > 0 then return matches end
+
+    -- Adjective-only fallback: if noun matching found nothing, treat all words
+    -- as adjectives. Allows "iron" to select the iron key when disambiguating.
+    local adjOnly = {}
+    for _, obj in ipairs(candidates) do
+        if obj.adjectives then
+            local allMatch = true
+            for _, word in ipairs(wordList) do
+                local found = false
+                for _, objAdj in ipairs(obj.adjectives) do
+                    if objAdj == word then found = true; break end
+                end
+                if not found then allMatch = false; break end
+            end
+            if allMatch then adjOnly[#adjOnly + 1] = obj end
+        end
+    end
+    return adjOnly
 end
 
 -- ---------------------------------------------------------------------------
@@ -234,16 +254,16 @@ function Resolver.resolve(intent)
     if resolveFirst == "iobj" then
         local iobjRef, err, data = resolvePhrase(intent.iobjWords, "iobj")
         if err then return err, data end
+        intent.iobjRef = iobjRef  -- set before resolving dobj so it's in intent if dobj fails
         local dobjRef, err2, data2 = resolvePhrase(intent.dobjWords, "dobj")
         if err2 then return err2, data2 end
-        intent.iobjRef = iobjRef
         intent.dobjRef = dobjRef
     else
         local dobjRef, err, data = resolvePhrase(intent.dobjWords, "dobj")
         if err then return err, data end
+        intent.dobjRef = dobjRef  -- set before resolving iobj so it's in intent if iobj fails
         local iobjRef, err2, data2 = resolvePhrase(intent.iobjWords, "iobj")
         if err2 then return err2, data2 end
-        intent.dobjRef = dobjRef
         intent.iobjRef = iobjRef
     end
 

@@ -5,8 +5,9 @@
 //
 // Call loadWorld() once at startup before any parser or world operations.
 
-import type { Room, GameObject, WorldContext } from '../types.ts'
+import type { Room, GameObject, WorldContext, Connector } from '../types.ts'
 import { World } from './world.ts'
+import { State } from './state.ts'
 import roomsJson  from '../../../../game/data/rooms.json'
 import objectsJson from '../../../../game/data/objects.json'
 import eventsJson from '../../../../game/data/events.json'
@@ -14,10 +15,18 @@ import eventsJson from '../../../../game/data/events.json'
 // ---------------------------------------------------------------------------
 // JSON shape types — the raw data as it comes from the files.
 // ---------------------------------------------------------------------------
+interface ConditionJson { type: string; flag: string; value: unknown }
+interface ExitJson {
+    dest:          string
+    condition?:    ConditionJson
+    traversalMsg?: string
+    blockedMsg?:   string
+}
+
 interface RoomJson {
     name:             string
     description:      string | { firstVisit: string; revisit: string }
-    exits:            Record<string, string>
+    exits:            Record<string, string | ExitJson>
     objects:          string[]
     isLit?:           boolean
     darkName?:        string
@@ -35,12 +44,31 @@ interface ObjectJson {
     fixed?:      boolean
     locked?:     boolean
     lockKey?:    string
+    isOpen?:     boolean
+    contType?:   'in' | 'on'
+    remapIn?:    string
+    remapOn?:    string
     listed?:     boolean
     specialDesc?:              string
     initSpecialDesc?:          string
     specialDescBeforeContents?: boolean
     specialDescOrder?:         number
     stateDesc?:                string
+}
+
+// ---------------------------------------------------------------------------
+// makeConnector — normalises a raw JSON exit value to a Connector object.
+// ---------------------------------------------------------------------------
+function makeConnector(raw: string | ExitJson): Connector {
+    if (typeof raw === 'string') return { dest: raw }
+    const conn: Connector = { dest: raw.dest }
+    if (raw.traversalMsg) conn.traversalMsg = raw.traversalMsg
+    if (raw.blockedMsg)   conn.blockedMsg   = raw.blockedMsg
+    if (raw.condition?.type === 'flagCheck') {
+        const { flag, value } = raw.condition
+        conn.canPass = () => State.get(flag) === value
+    }
+    return conn
 }
 
 // ---------------------------------------------------------------------------
@@ -65,10 +93,14 @@ export function loadWorld(): string {
 
     const rooms: Record<string, Room> = {}
     for (const [key, data] of Object.entries(roomsData.rooms)) {
+        const exits: Record<string, Connector> = {}
+        for (const [dir, raw] of Object.entries(data.exits ?? {})) {
+            exits[dir] = makeConnector(raw)
+        }
         const room: Room = {
             name:        data.name,
             description: makeDescription(data.description),
-            exits:       data.exits   ?? {},
+            exits,
             objects:     data.objects ?? [],
             handlers:    {},
             visited:     false,
@@ -94,6 +126,10 @@ export function loadWorld(): string {
         if (data.fixed                   !== undefined) obj.fixed                   = data.fixed
         if (data.locked                  !== undefined) obj.locked                  = data.locked
         if (data.lockKey                 !== undefined) obj.lockKey                 = data.lockKey
+        if (data.isOpen                  !== undefined) obj.isOpen                  = data.isOpen
+        if (data.contType                !== undefined) obj.contType                = data.contType
+        if (data.remapIn                 !== undefined) obj.remapIn                 = data.remapIn
+        if (data.remapOn                 !== undefined) obj.remapOn                 = data.remapOn
         if (data.listed                  !== undefined) obj.listed                  = data.listed
         if (data.specialDesc             !== undefined) obj.specialDesc             = data.specialDesc
         if (data.initSpecialDesc         !== undefined) obj.initSpecialDesc         = data.initSpecialDesc

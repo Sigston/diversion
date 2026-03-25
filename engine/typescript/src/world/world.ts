@@ -6,7 +6,7 @@
 // Populated at startup by loadWorld() / World.load(). Never hardcodes game
 // content — all data comes from JSON via the loader.
 
-import type { GameObject, Room, WorldContext } from '../types.ts'
+import type { Connector, GameObject, Room, WorldContext } from '../types.ts'
 
 // ---------------------------------------------------------------------------
 // Module-level state — populated by World.load()
@@ -16,7 +16,7 @@ let objects:        Record<string, GameObject> = {}
 let currentRoomKey  = ''
 let startRoomKey    = ''
 
-interface ObjectSnap { location: string | null; locked?: boolean; moved?: boolean }
+interface ObjectSnap { location: string | null; locked?: boolean; isOpen?: boolean; moved?: boolean }
 interface RoomSnap   { visited: boolean }
 const initialState: Record<string, ObjectSnap | RoomSnap> = {}
 
@@ -81,7 +81,9 @@ function listContents(room: Room, ctx: Required<Pick<WorldContext, 'excluded'>>)
             } else {
                 secondSpecial.push(obj)
             }
-        } else if (obj.listed !== false) {
+        } else if (obj.listed !== false
+                   && !obj.remapIn && !obj.remapOn
+                   && !(obj.contType === 'in' && obj.isOpen)) {
             miscItems.push(obj)
         }
     }
@@ -107,14 +109,86 @@ function listContents(room: Room, ctx: Required<Pick<WorldContext, 'excluded'>>)
         if (text) result.push(text)
     }
 
+    // Stage 4A: Composite objects (remapIn / remapOn) get a dedicated paragraph.
+    // They are excluded from the misc sentence and described here instead.
+    for (const key of room.objects) {
+        const obj = objects[key]
+        if (!obj || ctx.excluded[key] || obj.mentioned) continue
+        if (obj.location !== currentRoomKey) continue
+        if (!obj.remapIn && !obj.remapOn) continue
+
+        const lines: string[] = [`There is a ${obj.name} here.`]
+
+        if (obj.remapOn) {
+            const sub = World.getObject(obj.remapOn)
+            if (sub) {
+                const names = World.contentsOf(sub._key!)
+                    .filter(item => !item.mentioned)
+                    .map(item => { item.mentioned = true; return item.name })
+                if (names.length > 0) {
+                    lines.push(`On the ${sub.name}: ${names.join(', ')}.`)
+                }
+                sub.mentioned = true
+            }
+        }
+
+        if (obj.remapIn) {
+            const sub = World.getObject(obj.remapIn)
+            if (sub) {
+                if (sub.isOpen) {
+                    const names = World.contentsOf(sub._key!)
+                        .filter(item => !item.mentioned)
+                        .map(item => { item.mentioned = true; return item.name })
+                    if (names.length > 0) {
+                        lines.push(`The ${sub.name} is open. It contains: ${names.join(', ')}.`)
+                    } else {
+                        lines.push(`The ${sub.name} is open and empty.`)
+                    }
+                }
+                sub.mentioned = true
+            }
+        }
+
+        obj.mentioned = true
+        result.push(lines.join(' '))
+    }
+
+    // Stage 4B: Direct containers in the room (on-surfaces and open in-containers).
+    for (const key of room.objects) {
+        const cont = objects[key]
+        if (!cont || !cont.contType || ctx.excluded[key] || cont.mentioned) continue
+        if (cont.location !== currentRoomKey) continue
+
+        if (cont.contType === 'on') {
+            const names = World.contentsOf(key)
+                .filter(item => !item.mentioned)
+                .map(item => { item.mentioned = true; return item.name })
+            if (names.length > 0) {
+                result.push(`On the ${cont.name}: ${names.join(', ')}.`)
+            }
+            cont.mentioned = true
+        } else if (cont.contType === 'in' && cont.isOpen) {
+            const names = World.contentsOf(key)
+                .filter(item => !item.mentioned)
+                .map(item => { item.mentioned = true; return item.name })
+            if (names.length > 0) {
+                result.push(`The ${cont.name} is open. It contains: ${names.join(', ')}.`)
+            } else {
+                result.push(`The ${cont.name} is open and empty.`)
+            }
+            cont.mentioned = true
+        }
+        // Closed in-containers: skip (in misc list or invisible if listed:false).
+    }
+
     return result.length > 0 ? result.join('\n\n') : null
 }
 
 function listExits(room: Room): string | null {
     const available: string[] = []
-    for (const [dir, exit] of Object.entries(room.exits)) {
-        const dest = typeof exit === 'function' ? exit() : exit
-        if (dest) available.push(dir)
+    for (const [dir, conn] of Object.entries(room.exits)) {
+        const passable = !conn.canPass || conn.canPass()
+        if (passable) available.push(dir)
     }
     if (available.length === 0) return null
     available.sort()
@@ -137,9 +211,11 @@ export const World = {
         currentRoomKey = startRoom
 
         for (const [key, obj] of Object.entries(objects)) {
+            obj._key = key   // store own key for container operations
             const snap: ObjectSnap = { location: obj.location }
-            if (obj.locked !== undefined) snap.locked = obj.locked
-            if (obj.moved  !== undefined) snap.moved  = obj.moved
+            if (obj.locked  !== undefined) snap.locked  = obj.locked
+            if (obj.isOpen  !== undefined) snap.isOpen  = obj.isOpen
+            if (obj.moved   !== undefined) snap.moved   = obj.moved
             initialState[key] = snap
         }
         for (const key of Object.keys(rooms)) {
@@ -163,18 +239,38 @@ export const World = {
         const scope: GameObject[] = []
         const room = rooms[currentRoomKey]
 
+        function isReachable(obj: GameObject): boolean {
+            const loc = obj.location
+            if (loc === currentRoomKey) return true
+            if (!loc) return false
+            const container = objects[loc]
+            if (!container) return false
+            if (!isReachable(container)) return false
+            if (container.contType === 'on') return true
+            if (container.contType === 'in' && container.isOpen) return true
+            return false
+        }
+
         for (const key of room.objects) {
             const obj = objects[key]
-            if (obj && obj.location === currentRoomKey) {
-                scope.push(obj)
-            }
+            if (obj && isReachable(obj)) scope.push(obj)
         }
         for (const obj of Object.values(objects)) {
-            if (obj.location === 'inventory') {
-                scope.push(obj)
-            }
+            if (obj.location === 'inventory') scope.push(obj)
         }
         return scope
+    },
+
+    contentsOf(objKey: string): GameObject[] {
+        const result = Object.values(objects).filter(o => o.location === objKey)
+        result.sort((a, b) => a.name.localeCompare(b.name))
+        return result
+    },
+
+    resolveContainer(obj: GameObject, prep: string): GameObject {
+        if (prep === 'in' && obj.remapIn) return objects[obj.remapIn]!
+        if (prep === 'on' && obj.remapOn) return objects[obj.remapOn]!
+        return obj
     },
 
     describeCurrentRoom(): string {
@@ -227,6 +323,7 @@ export const World = {
         const carried = Object.values(objects)
             .filter(o => o.location === 'inventory')
             .map(o => o.name)
+            .sort()
         if (carried.length === 0) return 'You are carrying nothing.'
         return 'You are carrying: ' + carried.join(', ') + '.'
     },
@@ -239,6 +336,7 @@ export const World = {
                 const s = snap as ObjectSnap
                 objects[key].location = s.location
                 if (s.locked !== undefined) objects[key].locked = s.locked
+                if (s.isOpen !== undefined) objects[key].isOpen = s.isOpen
                 objects[key].moved = s.moved
             }
         }
@@ -258,5 +356,9 @@ export const World = {
 
     getObject(key: string): GameObject | undefined {
         return objects[key]
+    },
+
+    getConnector(room: Room, dir: string): Connector | undefined {
+        return room.exits[dir]
     },
 }

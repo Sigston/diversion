@@ -73,8 +73,8 @@ export function process(rawInput: string): string {
 
     if (!result.ok) {
         if (result.kind === 'NOT_FOUND') {
-            const noun = result.words.at(-1) ?? 'that'
-            return `You don't see any ${noun} here.`
+            const phrase = result.words.length > 0 ? result.words.join(' ') : 'that'
+            return `You don't see any ${phrase} here.`
         }
         // AMBIGUOUS
         state   = 'AWAIT_CLARIFY'

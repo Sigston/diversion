@@ -18,6 +18,11 @@ export interface GameObject {
     portable:    boolean
     locked?:     boolean
     lockKey?:    string
+    isOpen?:     boolean
+    contType?:   'in' | 'on'
+    remapIn?:    string
+    remapOn?:    string
+    _key?:       string
     listed?:     boolean
     mentioned?:  boolean
     moved?:      boolean
@@ -29,10 +34,17 @@ export interface GameObject {
     handlers:    Record<string, Handler>
 }
 
+export interface Connector {
+    dest:          string
+    traversalMsg?: string
+    blockedMsg?:   string
+    canPass?:      () => boolean
+}
+
 export interface Room {
     name:             string
     description:      (self: Room, ctx: WorldContext) => string
-    exits:            Record<string, string | (() => string | null)>
+    exits:            Record<string, Connector>
     objects:          string[]
     handlers:         Record<string, Handler>
     visited:          boolean

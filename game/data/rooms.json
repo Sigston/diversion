@@ -1,14 +1,14 @@
 {
-  "startRoom": "master_bedroom_north",
+  "startRoom": "player_quarters",
   "rooms": {
     "player_quarters": {
       "name": "Your Quarters",
       "description": {
-        "firstVisit": "Your quarters are exactly as you left them — which is to say, arranged with the particular chaos of someone who knows where everything is. The writing desk dominates one wall. An oil lamp sits where you last set it down. Somewhere nearby, an iron key catches the light.",
-        "revisit": "Your quarters. The writing desk, the lamp, the key."
+        "firstVisit": "Your quarters are exactly as you left them — which is to say, arranged with the particular chaos of someone who knows where everything is.",
+        "revisit": "Your quarters."
       },
       "exits": { "north": "entrance_passage" },
-      "objects": ["iron_key", "copper_key", "oil_lamp", "writing_desk", "chest"]
+      "objects": ["iron_key", "copper_key", "oil_lamp", "writing_desk", "desk_surface", "desk_drawer", "quill_pen", "chest", "velvet_pouch"]
     },
     "entrance_passage": {
       "name": "Entrance Passage",
@@ -16,7 +16,21 @@
         "firstVisit": "A narrow stone passage leads away from your quarters. Bare walls, bare floor. The way back is to the south.",
         "revisit": "The entrance passage. Bare stone."
       },
-      "exits": { "south": "player_quarters" },
+      "exits": {
+        "south": "player_quarters",
+        "east": {
+          "dest": "blocked_passage",
+          "condition": { "type": "flagCheck", "flag": "test_passage_open", "value": true },
+          "traversalMsg": "You push through the heavy door.",
+          "blockedMsg": "The door is locked shut."
+        }
+      },
+      "objects": []
+    },
+    "blocked_passage": {
+      "name": "Blocked Passage",
+      "description": "A short corridor. The way back is west.",
+      "exits": { "west": "entrance_passage" },
       "objects": []
     },
     "master_bedroom_north": {

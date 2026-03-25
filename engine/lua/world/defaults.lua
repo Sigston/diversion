@@ -59,6 +59,72 @@ Defaults["examine"] = {
                 desc = desc .. " " .. state
             end
         end
+        -- Sub-container summary for composite objects (remapIn / remapOn).
+        if obj.remapIn then
+            local sub = World.getObject(obj.remapIn)
+            if sub then
+                if not sub.isOpen then
+                    desc = desc .. "\n" .. "The " .. sub.name .. " is closed."
+                else
+                    local contents = World.contentsOf(sub._key)
+                    if #contents > 0 then
+                        local names = {}
+                        for _, item in ipairs(contents) do names[#names + 1] = item.name end
+                        desc = desc .. "\n" .. "The " .. sub.name .. " is open. It contains: " ..
+                               table.concat(names, ", ") .. "."
+                    else
+                        desc = desc .. "\n" .. "The " .. sub.name .. " is open and empty."
+                    end
+                end
+            end
+        end
+        if obj.remapOn then
+            local sub = World.getObject(obj.remapOn)
+            if sub then
+                local contents = World.contentsOf(sub._key)
+                if #contents > 0 then
+                    local names = {}
+                    for _, item in ipairs(contents) do names[#names + 1] = item.name end
+                    desc = desc .. "\n" .. "On the " .. sub.name .. ": " ..
+                           table.concat(names, ", ") .. "."
+                else
+                    desc = desc .. "\n" .. "The " .. sub.name .. " is empty."
+                end
+            end
+        end
+        -- Container state and contents for objects that are themselves containers (Examine only).
+        if obj.contType then
+            if obj.contType == "in" then
+                if not obj.isOpen then
+                    desc = desc .. " It is closed."
+                else
+                    desc = desc .. " It is open."
+                    local contents = World.contentsOf(obj._key)
+                    if #contents > 0 then
+                        local names = {}
+                        for _, item in ipairs(contents) do
+                            names[#names + 1] = item.name
+                        end
+                        desc = desc .. "\n" .. "It contains: " ..
+                               table.concat(names, ", ") .. "."
+                    else
+                        desc = desc .. "\n" .. "It is empty."
+                    end
+                end
+            elseif obj.contType == "on" then
+                local contents = World.contentsOf(obj._key)
+                if #contents > 0 then
+                    local names = {}
+                    for _, item in ipairs(contents) do
+                        names[#names + 1] = item.name
+                    end
+                    desc = desc .. "\n" .. "On it: " ..
+                           table.concat(names, ", ") .. "."
+                else
+                    desc = desc .. "\n" .. "It is empty."
+                end
+            end
+        end
         return desc
     end,
 }
@@ -160,21 +226,16 @@ local goHandler = {
             return "Go where?"
         end
         local room = World.currentRoom()
-        local exit = room.exits[direction]
-        if not exit then
+        local conn = World.getConnector(room, direction)
+        if not conn then
             return "You can't go that way."
         end
-        local destKey
-        if type(exit) == "function" then
-            destKey = exit()
-        else
-            destKey = exit
+        if conn.canPass and not conn.canPass() then
+            return conn.blockedMsg or "You can't go that way."
         end
-        if not destKey then
-            return "You can't go that way."
-        end
-        World.moveTo(destKey)
-        return World.describeCurrentRoom()
+        local out = conn.traversalMsg and (conn.traversalMsg .. "\n\n") or ""
+        World.moveTo(conn.dest)
+        return out .. World.describeCurrentRoom()
     end,
 }
 
@@ -249,11 +310,71 @@ Defaults["lock"] = {
 }
 
 -- ---------------------------------------------------------------------------
+-- open
+-- Opens an openable object.
+-- verify: object must have isOpen defined; must not already be open; must not be locked.
+-- action: sets isOpen = true.
+-- ---------------------------------------------------------------------------
+Defaults["open"] = {
+    verify = function(obj, _intent)
+        if not obj then
+            return { illogical = "You don't see that here." }
+        end
+        -- Remap to the in-container sub-object if present (e.g. "open desk" → desk_drawer).
+        local target = (obj.remapIn and World.getObject(obj.remapIn)) or obj
+        if target.isOpen == nil then
+            return { illogical = "That doesn't open." }
+        end
+        if target.isOpen then
+            return { illogicalAlready = "It's already open." }
+        end
+        if target.locked then
+            return { illogicalNow = "It's locked." }
+        end
+        return { logical = true }
+    end,
+
+    action = function(obj, _intent)
+        local target = (obj.remapIn and World.getObject(obj.remapIn)) or obj
+        target.isOpen = true
+        return "Opened."
+    end,
+}
+
+-- ---------------------------------------------------------------------------
+-- close
+-- Closes an openable object.
+-- verify: object must have isOpen defined; must not already be closed.
+-- action: sets isOpen = false.
+-- ---------------------------------------------------------------------------
+Defaults["close"] = {
+    verify = function(obj, _intent)
+        if not obj then
+            return { illogical = "You don't see that here." }
+        end
+        -- Remap to the in-container sub-object if present (e.g. "close desk" → desk_drawer).
+        local target = (obj.remapIn and World.getObject(obj.remapIn)) or obj
+        if target.isOpen == nil then
+            return { illogical = "That doesn't close." }
+        end
+        if not target.isOpen then
+            return { illogicalAlready = "It's already closed." }
+        end
+        return { logical = true }
+    end,
+
+    action = function(obj, _intent)
+        local target = (obj.remapIn and World.getObject(obj.remapIn)) or obj
+        target.isOpen = false
+        return "Closed."
+    end,
+}
+
+-- ---------------------------------------------------------------------------
 -- put
--- Moves a held object to the current room, near the indirect object.
--- Full container placement (object inside object) deferred to Milestone 3.
+-- Moves a held object into or onto a container.
 -- verify: dobj must be in inventory.
--- action: move dobj to current room; report using the preposition given.
+-- action: resolve container via remapIn/remapOn; validate; move dobj into it.
 -- ---------------------------------------------------------------------------
 Defaults["put"] = {
     verify = function(obj, _intent)
@@ -271,9 +392,18 @@ Defaults["put"] = {
             return "Put the " .. obj.name .. " where?"
         end
         local prep = intent.prep or "in"
-        World.moveObject(obj, World.currentRoomKey())
+        local container = World.resolveContainer(intent.iobjRef, prep)
+        -- Validate the container accepts this prep.
+        if not container.contType or container.contType ~= prep then
+            return "You can't put things " .. prep .. " the " .. container.name .. "."
+        end
+        -- In-containers must be open.
+        if container.contType == "in" and not container.isOpen then
+            return "The " .. container.name .. " isn't open."
+        end
+        World.moveObject(obj, container._key)
         return "You put the " .. obj.name .. " " .. prep .. " the " ..
-               intent.iobjRef.name .. "."
+               container.name .. "."
     end,
 }
 

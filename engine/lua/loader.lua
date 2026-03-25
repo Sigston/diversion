@@ -8,6 +8,7 @@
 
 local json  = require("lib.json")
 local World = require("engine.lua.world.world")
+local State = require("engine.lua.world.state")
 
 local Loader = {}
 
@@ -24,6 +25,33 @@ local function readFile(path)
     local content = f:read("*a")
     f:close()
     return content
+end
+
+-- ---------------------------------------------------------------------------
+-- makeConnector — normalises a raw JSON exit value to a connector table.
+--
+-- JSON forms:
+--   plain string  "room_key"
+--     → { dest = "room_key" }  (always traversable)
+--
+--   object  { dest, condition?, traversalMsg?, blockedMsg? }
+--     → connector table; condition "flagCheck" builds a canPass closure.
+-- ---------------------------------------------------------------------------
+local function makeConnector(raw)
+    if type(raw) == "string" then
+        return { dest = raw }
+    end
+    local conn = {
+        dest         = raw.dest,
+        traversalMsg = raw.traversalMsg,
+        blockedMsg   = raw.blockedMsg,
+    }
+    if raw.condition and raw.condition.type == "flagCheck" then
+        local flag = raw.condition.flag
+        local val  = raw.condition.value
+        conn.canPass = function() return State.get(flag) == val end
+    end
+    return conn
 end
 
 -- ---------------------------------------------------------------------------
@@ -65,10 +93,14 @@ function Loader.load()
     -- Build rooms table
     local rooms = {}
     for key, data in pairs(roomsJson.rooms) do
+        local exits = {}
+        for dir, raw in pairs(data.exits or {}) do
+            exits[dir] = makeConnector(raw)
+        end
         rooms[key] = {
             name        = data.name,
             description = makeDescription(data.description),
-            exits       = data.exits    or {},
+            exits       = exits,
             objects     = data.objects  or {},
             handlers    = {},
             visited     = false,
@@ -96,6 +128,10 @@ function Loader.load()
         if data.fixed                  ~= nil then obj.fixed                  = data.fixed                  end
         if data.locked                 ~= nil then obj.locked                 = data.locked                 end
         if data.lockKey                ~= nil then obj.lockKey                = data.lockKey                end
+        if data.isOpen                 ~= nil then obj.isOpen                 = data.isOpen                 end
+        if data.contType               ~= nil then obj.contType               = data.contType               end
+        if data.remapIn                ~= nil then obj.remapIn                = data.remapIn                end
+        if data.remapOn                ~= nil then obj.remapOn                = data.remapOn                end
         if data.listed                 ~= nil then obj.listed                 = data.listed                 end
         if data.specialDesc            ~= nil then obj.specialDesc            = data.specialDesc            end
         if data.initSpecialDesc        ~= nil then obj.initSpecialDesc        = data.initSpecialDesc        end

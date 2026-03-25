@@ -108,11 +108,9 @@ function Parser.process(rawInput)
     local result, extra = Resolver.resolve(intent)
 
     if result == Resolver.FAIL_NOT_FOUND then
-        local words = extra and extra.words
-        local noun  = (words and words[#words]) or
-                      (intent.dobjWords and intent.dobjWords[#intent.dobjWords]) or
-                      "that"
-        return "You don't see any " .. noun .. " here."
+        local words = (extra and extra.words) or intent.dobjWords or {}
+        local phrase = #words > 0 and table.concat(words, " ") or "that"
+        return "You don't see any " .. phrase .. " here."
     end
 
     if result == Resolver.FAIL_AMBIGUOUS then

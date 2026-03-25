@@ -1,0 +1,10 @@
+# Markdown — kept locally, not published
+*.md
+
+# Node / build artefacts
+node_modules/
+engine/typescript/dist/
+
+# OS noise
+.DS_Store
+Thumbs.db

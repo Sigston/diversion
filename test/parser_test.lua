@@ -10,6 +10,7 @@ local Parser   = require("engine.lua.parser.init")
 local World    = require("engine.lua.world.world")
 local Resolver = require("engine.lua.parser.resolver")
 local Loader   = require("engine.lua.loader")
+local State    = require("engine.lua.world.state")
 
 -- Load world data from JSON once before any tests run.
 Loader.load()
@@ -20,6 +21,7 @@ local function run(printFn)
     printFn = printFn or print
     World.reset()   -- ensure clean world state regardless of what ran before
     Parser.reset()  -- ensure clean FSM state (NORMAL, no pending clarification)
+    State.reset()   -- ensure clean flag state
     local passed = 0
     local failed = 0
 
@@ -63,21 +65,25 @@ local function run(printFn)
         "Your Quarters\n" ..
         "Your quarters are exactly as you left them — which is to " ..
         "say, arranged with the particular chaos of someone who " ..
-        "knows where everything is. The writing desk dominates one " ..
-        "wall. An oil lamp sits where you last set it down. " ..
-        "Somewhere nearby, an iron key catches the light." ..
+        "knows where everything is." ..
+        "\n\nYou can also see: iron key, copper key, oil lamp, and small chest." ..
+        "\n\nThere is a writing desk here. On the desk surface: quill pen." ..
         "\n\nExits: north.")
 
     check("second look gives short description",
         "look",
         "Your Quarters\n" ..
-        "Your quarters. The writing desk, the lamp, the key." ..
+        "Your quarters." ..
+        "\n\nYou can also see: iron key, copper key, oil lamp, and small chest." ..
+        "\n\nThere is a writing desk here. On the desk surface: quill pen." ..
         "\n\nExits: north.")
 
     check("l is a synonym for look",
         "l",
         "Your Quarters\n" ..
-        "Your quarters. The writing desk, the lamp, the key." ..
+        "Your quarters." ..
+        "\n\nYou can also see: iron key, copper key, oil lamp, and small chest." ..
+        "\n\nThere is a writing desk here. On the desk surface: quill pen." ..
         "\n\nExits: north.")
 
     -- -----------------------------------------------------------------------
@@ -110,8 +116,9 @@ local function run(printFn)
 
     check("examine the desk",
         "examine desk",
-        "A large wooden desk. Its surface is bare except for a " ..
-        "faint ring left by some long-gone cup.")
+        "A large wooden desk. A faint ring left by some long-gone cup marks the surface." ..
+        "\nThe desk drawer is closed." ..
+        "\nOn the desk surface: quill pen.")
 
     check("examine something not here",
         "examine dragon",
@@ -170,14 +177,16 @@ local function run(printFn)
         "The entrance passage. Bare stone." ..
         "\n\nExits: south.")
 
-    check("go east blocked (no exit in entrance passage)",
+    check("go east blocked (connector present but canPass false)",
         "go east",
-        "You can't go that way.")
+        "The door is locked shut.")
 
     check("go south returns to player quarters",
         "go south",
         "Your Quarters\n" ..
-        "Your quarters. The writing desk, the lamp, the key." ..
+        "Your quarters." ..
+        "\n\nYou can also see: iron key, copper key, oil lamp, and small chest." ..
+        "\n\nThere is a writing desk here. On the desk surface: quill pen." ..
         "\n\nExits: north.")
 
     -- -----------------------------------------------------------------------
@@ -194,7 +203,9 @@ local function run(printFn)
     check("bare 's' abbreviation moves back",
         "s",
         "Your Quarters\n" ..
-        "Your quarters. The writing desk, the lamp, the key." ..
+        "Your quarters." ..
+        "\n\nYou can also see: iron key, copper key, oil lamp, and small chest." ..
+        "\n\nThere is a writing desk here. On the desk surface: quill pen." ..
         "\n\nExits: north.")
 
     check("bare 'n' abbreviation moves again",
@@ -203,14 +214,16 @@ local function run(printFn)
         "The entrance passage. Bare stone." ..
         "\n\nExits: south.")
 
-    check("bare direction with no exit",
+    check("bare direction with blocked connector",
         "east",
-        "You can't go that way.")
+        "The door is locked shut.")
 
     check("bare 'south' returns home",
         "south",
         "Your Quarters\n" ..
-        "Your quarters. The writing desk, the lamp, the key." ..
+        "Your quarters." ..
+        "\n\nYou can also see: iron key, copper key, oil lamp, and small chest." ..
+        "\n\nThere is a writing desk here. On the desk surface: quill pen." ..
         "\n\nExits: north.")
 
     -- -----------------------------------------------------------------------
@@ -239,9 +252,9 @@ local function run(printFn)
     -- copper_key and iron_key are in inventory; oil_lamp is in the room.
     -- -----------------------------------------------------------------------
 
-    check("put key on desk",
+    check("put key on desk (remaps to desk surface)",
         "put iron key on desk",
-        "You put the iron key on the writing desk.")
+        "You put the iron key on the desk surface.")
 
     check("put key on desk again (not holding it)",
         "put iron key on desk",
@@ -253,7 +266,16 @@ local function run(printFn)
 
     -- -----------------------------------------------------------------------
     header("unlock / lock")
+    -- iron_key is on desk_surface (accessible); copper_key is in inventory.
     -- -----------------------------------------------------------------------
+
+    check("unlock chest with ambiguous key disambiguates",
+        "unlock chest with key",
+        "Which do you mean, the iron key or the copper key?")
+
+    check("clarifying wrong key gives correct rejection",
+        "copper key",
+        "That key doesn't fit.")
 
     check("unlock chest with no key",
         "unlock chest",
@@ -283,6 +305,20 @@ local function run(printFn)
         "unlock desk",
         "That doesn't have a lock.")
 
+    -- Chest is locked; iron_key is on desk_surface (accessible), copper_key in inventory.
+    -- Adjective-only disambiguation: "iron" should resolve to the iron key.
+    check("unlock with key is ambiguous",
+        "unlock chest with key",
+        "Which do you mean, the iron key or the copper key?")
+
+    check("adjective-only clarification selects iron key",
+        "iron",
+        "Unlocked.")
+
+    check("lock chest to restore state",
+        "lock chest with iron key",
+        "Locked.")
+
     -- -----------------------------------------------------------------------
     header("verifyRank")
     -- -----------------------------------------------------------------------
@@ -309,6 +345,226 @@ local function run(printFn)
     checkRank("illogicalNow -> 40",             { illogicalNow = "" },    40)
     checkRank("illogical -> 30",                { illogical = "" },       30)
     checkRank("nonObvious -> 30",               { nonObvious = true },    30)
+
+    -- -----------------------------------------------------------------------
+    header("connectors")
+    -- Player is in player_quarters (reset). Go north to entrance_passage first.
+    -- -----------------------------------------------------------------------
+
+    check("go north to entrance passage (setup for connector tests)",
+        "north",
+        "Entrance Passage\n" ..
+        "The entrance passage. Bare stone." ..
+        "\n\nExits: south.")
+
+    check("blocked connector returns blockedMsg",
+        "east",
+        "The door is locked shut.")
+
+    check("listExits hides blocked connector",
+        "look",
+        "Entrance Passage\n" ..
+        "The entrance passage. Bare stone." ..
+        "\n\nExits: south.")
+
+    -- Unlock the passage via State flag (direct engine call, not a parser command).
+    State.set("test_passage_open", true)
+
+    check("unblocked connector traverses with traversalMsg",
+        "east",
+        "You push through the heavy door.\n\n" ..
+        "Blocked Passage\n" ..
+        "A short corridor. The way back is west." ..
+        "\n\nExits: west.")
+
+    check("listExits shows unblocked connector from destination",
+        "look",
+        "Blocked Passage\n" ..
+        "A short corridor. The way back is west." ..
+        "\n\nExits: west.")
+
+    -- -----------------------------------------------------------------------
+    header("open / close")
+    -- Player is in blocked_passage after connector tests.
+    -- Navigate back to player_quarters where the chest is.
+    -- (test_passage_open is still true, so east exit shows in entrance_passage.)
+    -- -----------------------------------------------------------------------
+
+    check("west back to entrance passage",
+        "west",
+        "Entrance Passage\n" ..
+        "The entrance passage. Bare stone." ..
+        "\n\nExits: east, south.")
+
+    check("south back to player quarters",
+        "south",
+        "Your Quarters\n" ..
+        "Your quarters." ..
+        "\n\nYou can also see: oil lamp and small chest." ..
+        "\n\nThere is a writing desk here. On the desk surface: iron key, quill pen." ..
+        "\n\nExits: north.")
+
+    -- Chest is locked from earlier lock tests.
+    check("open locked chest is blocked",
+        "open chest",
+        "It's locked.")
+
+    check("unlock chest to allow opening",
+        "unlock chest with iron key",
+        "Unlocked.")
+
+    check("open chest",
+        "open chest",
+        "Opened.")
+
+    check("open chest again (already open)",
+        "open chest",
+        "It's already open.")
+
+    check("close chest",
+        "close chest",
+        "Closed.")
+
+    check("close chest again (already closed)",
+        "close chest",
+        "It's already closed.")
+
+    check("open non-openable object",
+        "open lamp",
+        "That doesn't open.")
+
+    -- -----------------------------------------------------------------------
+    header("containment")
+    -- Player is in player_quarters.
+    -- iron_key: on desk_surface (put there during put tests)
+    -- quill_pen: on desk_surface (initial location)
+    -- velvet_pouch: in chest (chest is unlocked and closed from open/close tests)
+    -- desk_drawer: closed
+    -- -----------------------------------------------------------------------
+
+    -- quill pen is in scope via desk_surface (contType "on")
+    check("examine quill pen via desk surface",
+        "examine quill pen",
+        "A quill pen of dark feather. The nib is still sharp.")
+
+    -- examine a surface shows its contents
+    check("examine desk surface shows contents",
+        "examine desk surface",
+        "The writing surface of the desk.\nOn it: iron key, quill pen.")
+
+    -- velvet pouch not in scope while chest is closed
+    check("velvet pouch out of scope when chest closed",
+        "examine velvet pouch",
+        "You don't see any velvet pouch here.")
+
+    -- examine closed in-container shows closed state
+    check("examine desk drawer (closed)",
+        "examine desk drawer",
+        "A narrow drawer in the writing desk. It is closed.")
+
+    -- take quill pen from surface
+    check("take quill pen from desk surface",
+        "take quill pen",
+        "Taken.")
+
+    -- put it back on desk: remaps to desk_surface
+    check("put quill pen on desk (remaps to desk surface)",
+        "put quill pen on desk",
+        "You put the quill pen on the desk surface.")
+
+    -- take it again, try to put in closed drawer
+    check("take quill pen again",
+        "take quill pen",
+        "Taken.")
+
+    check("put quill pen in desk (drawer closed)",
+        "put quill pen in desk",
+        "The desk drawer isn't open.")
+
+    -- open drawer then put succeeds
+    check("open desk drawer",
+        "open desk drawer",
+        "Opened.")
+
+    check("put quill pen in desk (drawer open)",
+        "put quill pen in desk",
+        "You put the quill pen in the desk drawer.")
+
+    -- examine open in-container lists contents
+    check("examine desk drawer (open, with quill pen)",
+        "examine desk drawer",
+        "A narrow drawer in the writing desk. It is open.\nIt contains: quill pen.")
+
+    -- open chest to bring velvet pouch into scope
+    check("open chest (unlocked from earlier)",
+        "open chest",
+        "Opened.")
+
+    check("velvet pouch in scope when chest open",
+        "examine velvet pouch",
+        "A small velvet pouch, tied with a drawstring.")
+
+    -- examine open in-container shows its contents
+    check("examine chest (open, with velvet pouch)",
+        "examine chest",
+        "A small wooden chest secured with an iron lock. It is open.\n" ..
+        "It contains: velvet pouch.")
+
+    -- put something in a non-container errors cleanly
+    check("put key in lamp (lamp is not a container)",
+        "put copper key in lamp",
+        "You can't put things in the oil lamp.")
+
+    -- -----------------------------------------------------------------------
+    header("open / close desk via remap")
+    -- Player is in player_quarters.
+    -- desk_drawer is open (from "open desk drawer" earlier in containment tests).
+    -- iron_key is on desk_surface.
+    -- copper_key is in inventory.
+    -- -----------------------------------------------------------------------
+
+    -- close desk remaps to the drawer
+    check("close desk (remaps to drawer)",
+        "close desk",
+        "Closed.")
+
+    -- take iron key from the surface so we can put it in the drawer
+    check("take iron key from desk surface",
+        "take iron key",
+        "Taken.")
+
+    -- open desk remaps to the drawer
+    check("open desk (remaps to drawer)",
+        "open desk",
+        "Opened.")
+
+    -- put iron key in desk (drawer now open)
+    check("put iron key in desk",
+        "put iron key in desk",
+        "You put the iron key in the desk drawer.")
+
+    -- close desk again; iron key is now inside and out of scope
+    check("close desk again",
+        "close desk",
+        "Closed.")
+
+    check("iron key not in scope when drawer closed",
+        "take iron key",
+        "You don't see any iron key here.")
+
+    -- open desk and take the key back out
+    check("open desk to retrieve iron key",
+        "open desk",
+        "Opened.")
+
+    check("take iron key from open drawer",
+        "take iron key",
+        "Taken.")
+
+    -- confirm it is in inventory
+    check("inventory shows iron key and copper key",
+        "inventory",
+        "You are carrying: copper key, iron key.")
 
     -- -----------------------------------------------------------------------
     printFn("\n" .. passed .. " passed, " .. failed .. " failed.")

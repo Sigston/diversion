@@ -34,10 +34,12 @@ function World.load(roomsTable, objectsTable, startRoom)
 
     initialState = {}
     for key, obj in pairs(objects) do
+        obj._key = key    -- store own key for container operations
         initialState[key] = {
             location = obj.location,
             locked   = obj.locked,
             moved    = obj.moved,
+            isOpen   = obj.isOpen,
         }
     end
     for key in pairs(rooms) do
@@ -63,14 +65,29 @@ function World.currentContext()
     return {}
 end
 
+-- Returns true if obj is physically reachable from the current room.
+-- On-containers are always open. In-containers require isOpen = true.
+local function isReachable(obj)
+    local loc = obj.location
+    if loc == currentRoomKey then return true end
+    if loc == nil then return false end
+    local container = objects[loc]
+    if not container then return false end
+    if not isReachable(container) then return false end
+    if container.contType == "on" then return true end
+    if container.contType == "in" and container.isOpen then return true end
+    return false
+end
+
 -- Returns all objects currently in scope.
+-- Includes room objects (reachable through open containers/surfaces) + inventory.
 function World.inScope()
     local scope = {}
     local room  = rooms[currentRoomKey]
 
     for _, key in ipairs(room.objects) do
         local obj = objects[key]
-        if obj and obj.location == currentRoomKey then
+        if obj and isReachable(obj) then
             scope[#scope + 1] = obj
         end
     end
@@ -84,6 +101,30 @@ function World.inScope()
     return scope
 end
 
+-- Returns objects directly inside a container, sorted by name.
+function World.contentsOf(objKey)
+    local result = {}
+    for _, obj in pairs(objects) do
+        if obj.location == objKey then
+            result[#result + 1] = obj
+        end
+    end
+    table.sort(result, function(a, b) return a.name < b.name end)
+    return result
+end
+
+-- Follows remapIn/remapOn on obj to find the actual container for a PUT operation.
+-- If obj has no remap for the given prep, returns obj itself.
+function World.resolveContainer(obj, prep)
+    if prep == "in" and obj.remapIn then
+        return objects[obj.remapIn]
+    end
+    if prep == "on" and obj.remapOn then
+        return objects[obj.remapOn]
+    end
+    return obj
+end
+
 function World.describeInventory()
     local carried = {}
     for _, obj in pairs(objects) do
@@ -92,6 +133,7 @@ function World.describeInventory()
         end
     end
     if #carried == 0 then return "You are carrying nothing." end
+    table.sort(carried)
     return "You are carrying: " .. table.concat(carried, ", ") .. "."
 end
 
@@ -103,6 +145,9 @@ function World.reset()
             objects[key].location = snap.location
             if snap.locked ~= nil then
                 objects[key].locked = snap.locked
+            end
+            if snap.isOpen ~= nil then
+                objects[key].isOpen = snap.isOpen
             end
             objects[key].moved = snap.moved
         end
@@ -124,6 +169,10 @@ end
 
 function World.getObject(key)
     return objects[key]
+end
+
+function World.getConnector(room, dir)
+    return room.exits[dir]
 end
 
 -- ---------------------------------------------------------------------------
@@ -198,7 +247,9 @@ local function listContents(room, ctx)
                 else
                     secondSpecial[#secondSpecial + 1] = obj
                 end
-            elseif obj.listed ~= false then
+            elseif obj.listed ~= false
+                   and not obj.remapIn and not obj.remapOn
+                   and not (obj.contType == "in" and obj.isOpen) then
                 miscItems[#miscItems + 1] = obj
             end
         end
@@ -226,21 +277,110 @@ local function listContents(room, ctx)
         if text then result[#result + 1] = text end
     end
 
+    -- Stage 4A: Composite objects (remapIn / remapOn) get a dedicated paragraph.
+    -- They are excluded from the misc sentence and described here instead.
+    for _, key in ipairs(room.objects) do
+        local obj = objects[key]
+        if obj and not ctx.excluded[key] and not obj.mentioned
+                and obj.location == currentRoomKey
+                and (obj.remapIn or obj.remapOn) then
+            local lines = { "There is a " .. obj.name .. " here." }
+            if obj.remapOn then
+                local sub = World.getObject(obj.remapOn)
+                if sub then
+                    local contents = World.contentsOf(sub._key)
+                    local names = {}
+                    for _, item in ipairs(contents) do
+                        if not item.mentioned then
+                            names[#names + 1] = item.name
+                            item.mentioned = true
+                        end
+                    end
+                    if #names > 0 then
+                        lines[#lines + 1] = "On the " .. sub.name .. ": " ..
+                                             table.concat(names, ", ") .. "."
+                    end
+                    sub.mentioned = true
+                end
+            end
+            if obj.remapIn then
+                local sub = World.getObject(obj.remapIn)
+                if sub then
+                    if sub.isOpen then
+                        local contents = World.contentsOf(sub._key)
+                        local names = {}
+                        for _, item in ipairs(contents) do
+                            if not item.mentioned then
+                                names[#names + 1] = item.name
+                                item.mentioned = true
+                            end
+                        end
+                        if #names > 0 then
+                            lines[#lines + 1] = "The " .. sub.name .. " is open. It contains: " ..
+                                                 table.concat(names, ", ") .. "."
+                        else
+                            lines[#lines + 1] = "The " .. sub.name .. " is open and empty."
+                        end
+                    end
+                    sub.mentioned = true
+                end
+            end
+            obj.mentioned = true
+            result[#result + 1] = table.concat(lines, " ")
+        end
+    end
+
+    -- Stage 4B: Direct containers in the room (on-surfaces and open in-containers).
+    for _, key in ipairs(room.objects) do
+        local cont = objects[key]
+        if cont and cont.contType and not ctx.excluded[key] and not cont.mentioned
+                and cont.location == currentRoomKey then
+            if cont.contType == "on" then
+                local contents = World.contentsOf(key)
+                local names = {}
+                for _, item in ipairs(contents) do
+                    if not item.mentioned then
+                        names[#names + 1] = item.name
+                        item.mentioned = true
+                    end
+                end
+                if #names > 0 then
+                    result[#result + 1] = "On the " .. cont.name .. ": " ..
+                                           table.concat(names, ", ") .. "."
+                end
+                cont.mentioned = true
+            elseif cont.contType == "in" and cont.isOpen then
+                local contents = World.contentsOf(key)
+                local names = {}
+                for _, item in ipairs(contents) do
+                    if not item.mentioned then
+                        names[#names + 1] = item.name
+                        item.mentioned = true
+                    end
+                end
+                if #names > 0 then
+                    result[#result + 1] = "The " .. cont.name .. " is open. It contains: " ..
+                                           table.concat(names, ", ") .. "."
+                else
+                    result[#result + 1] = "The " .. cont.name .. " is open and empty."
+                end
+                cont.mentioned = true
+            end
+            -- Closed in-containers: skip (in misc list or invisible if listed:false).
+        end
+    end
+
     if #result == 0 then return nil end
     return table.concat(result, "\n\n")
 end
 
 -- Builds the "Exits: north, south." sentence for traversable exits.
+-- Blocked connectors (canPass returns false) are hidden from the list.
 local function listExits(room)
     local available = {}
-    for dir, exit in pairs(room.exits) do
-        local dest
-        if type(exit) == "function" then
-            dest = exit()
-        else
-            dest = exit
-        end
-        if dest then
+    for dir, conn in pairs(room.exits) do
+        local passable = not conn.canPass or conn.canPass()
+        if passable then
             available[#available + 1] = dir
         end
     end

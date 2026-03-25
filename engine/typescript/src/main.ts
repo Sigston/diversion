@@ -1,7 +1,9 @@
 import './style.css'
-import { loadWorld } from './world/loader.ts'
-import { World }     from './world/world.ts'
-import { process }   from './parser/index.ts'
+import { loadWorld }        from './world/loader.ts'
+import { World }            from './world/world.ts'
+import { process, reset as parserReset } from './parser/index.ts'
+import { State }            from './world/state.ts'
+import { runTests }         from './test/parserTest.ts'
 
 // Load world from JSON before any parser or world operations.
 const prologue = loadWorld()
@@ -198,8 +200,17 @@ window.visualViewport?.addEventListener('scroll', fitToViewport)
 fitToViewport()
 
 // ---------------------------------------------------------------------------
-// Startup: show prologue (if any) then the starting room.
+// Startup: run tests, reset, then show prologue and starting room.
 // ---------------------------------------------------------------------------
+runTests(print, colours)
+print('', colours.system)
+print('--- game start ---', colours.system)
+print('', colours.system)
+
+World.reset()
+parserReset()
+State.reset()
+
 const roomDesc = World.describeCurrentRoom()
 if (prologue) {
     processOutput(prologue + '\n[PAUSE]\n' + roomDesc)

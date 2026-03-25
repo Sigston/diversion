@@ -1,4 +1,12 @@
 -- world/state.lua
--- Global state flags and save/load.
--- e.g. State.set("lamp_lit", true), State.get("lamp_lit")
--- Built in Milestone 1a (flags only). Save/load in Milestone 2.
+-- Global state flags.
+-- State.set(key, value), State.get(key), State.reset()
+
+local State = {}
+local flags = {}
+
+function State.set(key, value) flags[key] = value end
+function State.get(key)        return flags[key]   end
+function State.reset()         flags = {}          end
+
+return State

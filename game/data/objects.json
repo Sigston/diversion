@@ -5,8 +5,7 @@
     "adjectives": ["iron", "old", "small"],
     "description": "A small iron key. The bow is cast in the shape of a hare.",
     "location": "player_quarters",
-    "portable": true,
-    "listed": false
+    "portable": true
   },
   "copper_key": {
     "name": "copper key",
@@ -14,8 +13,7 @@
     "adjectives": ["copper", "small"],
     "description": "A small copper key. Simpler in design than you'd expect.",
     "location": "player_quarters",
-    "portable": true,
-    "listed": false
+    "portable": true
   },
   "oil_lamp": {
     "name": "oil lamp",
@@ -23,17 +21,48 @@
     "adjectives": ["oil", "brass", "old"],
     "description": "A brass oil lamp. The reservoir is about half full.",
     "location": "player_quarters",
-    "portable": true,
-    "listed": false
+    "portable": true
   },
   "writing_desk": {
     "name": "writing desk",
     "aliases": ["desk"],
     "adjectives": ["writing", "large", "wooden"],
-    "description": "A large wooden desk. Its surface is bare except for a faint ring left by some long-gone cup.",
+    "description": "A large wooden desk. A faint ring left by some long-gone cup marks the surface.",
     "location": "player_quarters",
     "portable": false,
-    "listed": false
+    "remapIn": "desk_drawer",
+    "remapOn": "desk_surface"
+  },
+  "desk_surface": {
+    "name": "desk surface",
+    "aliases": ["surface", "top"],
+    "adjectives": ["desk", "writing"],
+    "description": "The writing surface of the desk.",
+    "location": "player_quarters",
+    "portable": false,
+    "fixed": true,
+    "listed": false,
+    "contType": "on"
+  },
+  "desk_drawer": {
+    "name": "desk drawer",
+    "aliases": ["drawer"],
+    "adjectives": ["desk", "small"],
+    "description": "A narrow drawer in the writing desk.",
+    "location": "player_quarters",
+    "portable": false,
+    "fixed": true,
+    "listed": false,
+    "contType": "in",
+    "isOpen": false
+  },
+  "quill_pen": {
+    "name": "quill pen",
+    "aliases": ["quill", "pen"],
+    "adjectives": ["quill", "dark", "feather"],
+    "description": "A quill pen of dark feather. The nib is still sharp.",
+    "location": "desk_surface",
+    "portable": true
   },
   "chest": {
     "name": "small chest",
@@ -44,6 +73,15 @@
     "portable": false,
     "locked": true,
     "lockKey": "iron_key",
-    "listed": false
+    "isOpen": false,
+    "contType": "in"
+  },
+  "velvet_pouch": {
+    "name": "velvet pouch",
+    "aliases": ["pouch"],
+    "adjectives": ["velvet", "small"],
+    "description": "A small velvet pouch, tied with a drawstring.",
+    "location": "chest",
+    "portable": true
   }
 }

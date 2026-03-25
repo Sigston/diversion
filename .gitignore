@@ -1,5 +1,6 @@
 # Markdown — kept locally, not published
 *.md
+!README.md
 
 # Node / build artefacts
 node_modules/

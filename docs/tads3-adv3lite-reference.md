@@ -941,6 +941,303 @@ Used for cycling atmospheric messages:
 
 ---
 
+## 12. Room Description and LOOK Composition
+
+This section covers the mechanics behind `LOOK` output in adv3Lite — how the
+room description, object listings, and exit list are assembled. Researched against
+the adv3Lite manual chapters on Rooms and Room Descriptions, and the adv3Lite
+source (`thing.t`, `exits.t`).
+
+---
+
+### 12.1 The Master Compositor: lookAroundWithin()
+
+When the player types LOOK (or enters a room), the Look action executes:
+
+```
+Look.execAction(cmd)
+  → gActor.outermostVisibleParent()   // find enclosing Room
+  → Room.lookAroundWithin()
+```
+
+`outermostVisibleParent()` walks the containment tree upward to find the
+enclosing Room (or the outermost transparent container if the actor is nested).
+Everything flows through `lookAroundWithin()` on that object.
+
+**`lookAroundWithin()` — full assembly sequence:**
+
+```
+1. Reset mentioned flags recursively on all contents
+     unmention(contents); unmentionRemoteContents()
+
+2. Room title
+     "<.roomname><<roomHeadline(gPlayerChar)>><./roomname>"
+     → roomTitle in lit conditions; darkName when dark
+
+3. [Terse-mode gate]
+     Skip desc if: GoTo/Continue AND !verbose AND already visited
+
+4. Find description source (nested actor support)
+     Walk up containment chain; if loc.useInteriorDesc → use loc.interiorDesc
+
+5. Branch on illumination:
+
+   ILLUMINATED branch:
+     5a. [Verbose/visited/explicit-look gate]
+           Show desc only if: verbose OR !visited OR gActionIs(Look)
+     5b. descObj.interiorDesc → roomFirstDesc (first visit) or desc
+     5c. listContents()
+           Stage 1: firstSpecialList items (specialDescBeforeContents=true)
+           Stage 2: miscContentsList ("You also see X, Y, and Z here.")
+           Stage 3: sub-contents of in-room containers/supporters
+           Stage 4: secondSpecialList items (specialDescBeforeContents=false)
+     5d. setSeen(); visited = true; examined = true
+
+   DARK branch:
+     5e. darkDesc only
+     5f. if recognizableInDark: visited = true; setKnown()
+
+6. Exit list (separate module)
+     gExitLister.lookAroundShowExits(gActor, self, isIlluminated)
+```
+
+---
+
+### 12.2 specialDesc vs initSpecialDesc
+
+Both cause an object to render a **dedicated paragraph** in the room listing,
+bypassing the generic "You also see..." sentence.
+
+**`specialDesc`** — active as long as defined and non-nil. Shows every LOOK.
+Typical use: a large piece of furniture described in relation to the room
+("A fine old desk stands in the middle of the room.").
+
+**`initSpecialDesc`** — active only while `useInitSpecialDesc` is true, which
+defaults to `(!moved)`. Once the object has been picked up and replaced, `moved`
+becomes true and `initSpecialDesc` is never shown again. Typical use: an item
+discovered in a specific arrangement that changes once disturbed
+("A small brass key lies beneath the mat.").
+
+Priority: if both are defined, `initSpecialDesc` shows while active, then
+`specialDesc` takes over permanently.
+
+**Dispatch logic (`showSpecialDesc()`):**
+```
+if mentioned: return                         // anti-duplication
+if initSpecialDesc defined AND useInitSpecialDesc:
+    display initSpecialDesc
+    mentioned = true
+else if specialDesc defined:
+    display specialDesc
+    mentioned = true
+if mentioned: newline paragraph
+noteSeen()
+```
+
+Setting `mentioned = true` is what prevents the object from also appearing in
+the miscellaneous listing. An object with `specialDesc` defined will show its
+paragraph even if `isListed = nil`.
+
+**`specialDescBeforeContents`** (default: true for Things, false for Actors)
+controls listing stage:
+- `true` → firstSpecialList → displays BEFORE the misc-items sentence (Stage 1)
+- `false` → secondSpecialList → displays AFTER the misc-items sentence (Stage 4)
+NPCs default to Stage 4 so they appear at the bottom of room descriptions.
+
+**`specialDescOrder`** (default 100) — integer controlling sort order within
+each special list. Lower numbers appear first.
+
+---
+
+### 12.3 The `mentioned` Flag — Anti-Duplication Mechanism
+
+`mentioned` is a property on every `Thing`. It is the sole anti-duplication
+mechanism across the room listing.
+
+**Reset:** At the very start of each `lookAroundWithin()` call:
+```
+unmention(contents)         // recursive; clears mentioned = nil on all
+unmentionRemoteContents()   // also clears remote-room connected objects
+```
+
+**Set:** `mentioned` is set to true in two places:
+1. `showSpecialDesc()` — when an object renders its specialDesc paragraph
+2. `ItemLister.show()` — when the misc-items lister includes the object in
+   the "You also see..." sentence
+
+**Author-set mentions.** Authors can suppress objects from automatic listing
+by mentioning them in room prose using macros:
+- `<<mention a obj>>` — prints `obj.aName`, sets `obj.mentioned = true`
+- `<<mention the obj>>` — prints `obj.theName`, sets `obj.mentioned = true`
+- `<<exclude obj>>` — sets `obj.mentioned = true` without printing anything
+- `<<list of lst>>` — prints the list, marks all as mentioned
+
+This is the mechanism for embedding object references in room prose without
+that object then also appearing in the automatic listing. The prose *is* the
+listing for that object.
+
+---
+
+### 12.4 The Four-Stage Listing Order (listContents)
+
+`listContents()` categorises every object in the room into one of three buckets:
+
+```
+foreach obj in room.contents:
+    if obj has active specialDesc/initSpecialDesc:
+        if obj.specialDescBeforeContents → firstSpecialList
+        else                            → secondSpecialList
+    else if obj.lookListed && !obj.mentioned:
+        miscContentsList
+
+Display:
+    Stage 1: firstSpecialList (sorted by specialDescOrder)
+    Stage 2: miscContentsList → "You also see X, Y, and Z here."
+    Stage 3: sub-contents of in-room containers and supporters
+    Stage 4: secondSpecialList (sorted by specialDescOrder)
+```
+
+The order is **data-driven**, not hardcoded. `specialDescBeforeContents`
+controls which stage an object lands in.
+
+---
+
+### 12.5 The `isListed` / `lookListed` Cascade
+
+```
+isFixed           (true = part of room; never portable)
+  └─ isListed     = !isFixed    (portable objects listed; fixed objects not)
+       └─ lookListed            = isListed (filter for LOOK specifically)
+       └─ inventoryListed       = isListed
+       └─ examineListed         = isListed
+```
+
+The misc-items filter is: `lookListed && !isHidden && !mentioned`.
+
+**`isHidden`** — completely conceals the object: not listed, not in scope, not
+addressable. Revealed by `discover()` (sets `isHidden = nil`).
+
+**`isDecoration`** — object responds to almost all commands with
+`notImportantMsg`. Only `decorationActions` (default: Examine) are allowed.
+Decorations ARE listed unless `isListed` is explicitly nil.
+
+---
+
+### 12.6 Room Description Properties
+
+| Property | Type | Behaviour |
+|---|---|---|
+| `roomTitle` | string | Bold heading, always shown. `darkName` when dark. |
+| `desc` | string/method | Main body text. Shown on first visit OR explicit LOOK OR verbose mode. |
+| `roomFirstDesc` | string/method | Shown instead of `desc` on the very first visit. After that, `desc` takes over. |
+| `interiorDesc` | evaluated | Defaults to `(desc)`. What `lookAroundWithin` actually reads. Override for nested container interiors. |
+| `isLit` | bool | True = room provides ambient light. False = dark room. |
+| `darkName` | string | Title in dark. Default: "In the dark". |
+| `darkDesc` | method | Body text in dark. Default: "It is pitch black; you can't see a thing." |
+| `recognizableInDark` | bool | If true, `visited` set even in darkness. |
+| `visited` | bool | Has the player been here? |
+| `examined` | bool | Has the room been fully described (in light)? |
+| `suppressListing` | bool | (adv3Lite has `contentsListedInLook`) Suppress automatic contents listing. |
+
+---
+
+### 12.7 examineStatus / stateDesc (Examine, Not LOOK)
+
+`stateDesc` and `examineStatus()` apply to **object Examine output only**.
+They do not contribute to room LOOK output.
+
+`examineStatus()` is called after `desc` prints during Examine. It:
+1. Appends `stateDesc` (a single-quoted string, evaluated, conveying mutable
+   state — "It is lit.", "The drawer is open.")
+2. Lists the object's visible contents via `listSubcontentsOf()` if the object
+   is a container with `areContentsListedInExamine = true`.
+
+State information visible *in room descriptions* comes through `specialDesc`
+(which can be a dynamic method reading object state), not through `stateDesc`.
+
+---
+
+### 12.8 Exit Listing — Separate Module
+
+Exit listing is handled by a separate module (`exits.t`), not embedded in Room.
+`lookAroundWithin()` delegates at the end:
+
+```
+gExitLister.lookAroundShowExits(gActor, self, isIlluminated)
+```
+
+**Visibility filter per direction:**
+- `TypeNil` — no exit, skip
+- Single-quoted string (blocking message) — hidden by default (`showSQSExits = nil`)
+- Double-quoted string — shown by default (`showDQSExits = true`)
+- Connector/Door object — shown if `isConnectorVisible && isConnectorListed`
+- Method/function — shown when room is illuminated
+
+**Format modes:**
+- `lookAroundExitLister` — prose sentence: "You can go north and south."
+- `lookAroundTerseExitLister` — bracketed compact list, optionally with links
+- `statuslineExitLister` — compact, for status bar
+- `explicitExitLister` — with destination names, for the EXITS command
+
+---
+
+### 12.9 Verbosity Mode — Terse vs Verbose
+
+In terse mode (`gameMain.verbose = nil`), on automatic room entry via GoTo/Continue:
+- Room desc is suppressed if already visited
+- Room title is always shown
+- Listing (specialDescs, misc items) is suppressed
+- An explicit LOOK always shows the full description regardless of mode
+
+In verbose mode (default): full description on every entry.
+
+This is relevant for "travel terse" behaviour — the player moves north and only
+sees the room title on subsequent visits until they explicitly LOOK.
+
+---
+
+### 12.10 Key Design Observations for the Diversion Engine
+
+1. **One compositor owns everything.** `lookAroundWithin()` is the single
+   entry point. All listing passes flow through it in a fixed order. Do not
+   scatter listing logic across individual handlers.
+
+2. **`mentioned` is the only anti-duplication mechanism.** Reset it before
+   each LOOK. Set it when an object is displayed. Nothing else is needed.
+
+3. **Four stages, data-driven.** The stage an object falls into is controlled
+   by `specialDescBeforeContents` on the object, not by hardcoded logic in
+   the compositor.
+
+4. **`isFixed → isListed → lookListed` cascade.** Fixed objects are not listed
+   by default. Authors override at the most specific level needed.
+
+5. **`roomFirstDesc` is a separate property, not a parameter.** adv3Lite uses
+   a `roomFirstDesc` property checked against the `visited` flag. The Diversion
+   engine already handles this better: `description` is a function receiving a
+   `ctx` argument (which includes `firstVisit`), making first-visit logic
+   fully authorable in the description handler itself rather than needing a
+   separate property.
+
+6. **Darkness is a complete replacement.** Dark rooms suppress desc, listing,
+   and (optionally) exits. Only `darkDesc` (and possibly `darkName`) shows.
+
+7. **Exit listing is decoupled.** The room has no exit-listing logic. A
+   separate module is called at the end of `lookAroundWithin()`. Keep this
+   separation.
+
+8. **Blocking exits are hidden from the exit list by default.** A single-quoted
+   string on an exit (a blocking message) is not shown in the exit list. This
+   is the right behaviour — the player should discover blocked exits by trying,
+   not by reading them in the exit list.
+
+9. **`stateDesc` / `examineStatus` are examine-only.** State visible in room
+   LOOK output comes through `specialDesc`. The Diversion engine should
+   mirror this: object state in room listings is a `specialDesc` equivalent;
+   `stateDesc` for Examine is a separate concern.
+
+---
+
 ## Sources
 
 - [adv3Lite Manual -- Action Results](https://faroutscience.com/adv3lite_docs/manual/actres.htm)

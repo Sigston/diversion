@@ -19,10 +19,13 @@ requirements in mind. More information about the specific game can be found in
 
 ## Architecture
 
-Full specification in `docs/architecture_v2.md` (canonical).
+Full specification in `docs/architecture_v3.md` (canonical).
+`docs/architecture_v2.md` is preserved as v2; its Section 18 contains the
+design analysis that produced v3 (room compositor, specialDesc, mentioned flag).
 `docs/architecture.md` is preserved as v1 with a change log in Section 18.
 `docs/tads3-adv3lite-reference.md` contains detailed research notes on the
-TADS 3 / adv3Lite system that informed these decisions.
+TADS 3 / adv3Lite system that informed these decisions. Section 12 covers
+the LOOK composition system researched for v3.
 This section summarises the decisions most likely to affect Claude Code's work.
 
 ### Layer diagram
@@ -579,11 +582,78 @@ so the world is populated before any test calls `World.reset()`.
 
 ---
 
+## Room listing (objects and exits on LOOK)
+
+Full design in `docs/architecture_v2.md` Section 16.1. Summary of decisions:
+
+`World.describeCurrentRoom()` will become a compositor that assembles three parts:
+the room description, a contents list, and an exit list. Do not implement before
+Milestone 4. Do not restructure `describeCurrentRoom()` in a way that prevents
+this — it currently returns a plain string; keep it that way until then.
+
+- Objects have a `listed` boolean (default `true`). Set `false` for objects
+  already covered by the room prose.
+- Exit listing: simple direction sentence ("Exits: north, east, down.").
+  Blocked/locked exits omitted. Door-specific messages deferred to when door
+  objects exist.
+- Narrator room-level responses override the description portion only; listing
+  is always appended unless `suppressListing = true` on the room.
+- `go` and `look` both call `describeCurrentRoom()` so both get the listing
+  automatically — no change needed to either handler.
+
+---
+
+## Connectors, doors, and traversal messages
+
+This is the next major design area after room listing. Research TADS 3 adv3Lite
+connector model before implementing. Key decisions recorded so far:
+
+**The TADS connector model.** In adv3Lite, the base unit between areas is not a
+raw exit string but a connector object (a `TravelConnector`). A connector sits on
+an exit and can: block travel with a message, require a key, trigger a before/after
+travel notification, or represent a physical door. This is more powerful than the
+current `exits` string/function model and should inform how we extend it.
+
+**Doors vs room divisions.** The current exit model doesn't distinguish between:
+- A door between two rooms (a lockable physical object, openable, closable)
+- A threshold between two parts of the same space (e.g. ballroom north/south)
+- An open archway or corridor (traversable, no object, possibly a message)
+
+When implementing connectors we need to decide how each of these is represented.
+Doors are objects in scope on both sides. Room divisions may warrant a traversal
+message but no object. Archways are silent.
+
+**Traversal messages.** A connector can carry an authored message printed when
+the player moves through it ("You push open the heavy door." / "You step out onto
+the gravel drive."). These are distinct from room descriptions — they describe the
+act of moving, not the destination. They should be optional and authored in JSON
+as part of the exit or connector definition.
+
+**Most rooms locked in early game.** Scene 1 opens with most of the house
+inaccessible. Rooms are unlocked progressively as the player returns from time
+periods. This means most exits in rooms.json will initially be blocked by a
+connector that checks a state flag, not by a missing exit entry. Do not remove
+exits from the data; lock them via connector logic.
+
+**Scene 1 rooms remaining to add:**
+- Drive/entrance area at the front of the house, ending at the "bubble limit"
+  (the boundary the player cannot cross — the edge of the simulation)
+- Garden areas connecting the house to the time machine location
+- Telescope room or terrace beyond the veranda
+
+These complete the playable area for Scene 1. All other rooms exist in the data
+but are locked at game start.
+
+---
+
 ## Milestone 4 — game content
 
 - [ ] First rooms and objects authored in JSON
 - [ ] Seed game: enough to walk around, pick things up, examine them
 - [ ] Something playable and publicly visible on the website
+- [ ] Room listing: extend `describeCurrentRoom()` into compositor (objects + exits)
+- [ ] Connector/door model: design and implement before authoring locked rooms
+- [ ] Scene 1 remaining rooms: drive, gardens, time machine area, telescope terrace
 
 ---
 

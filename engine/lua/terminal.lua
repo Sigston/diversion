@@ -64,6 +64,12 @@ local renderDirty     = true
 local lastAvailableW  = 0
 local maxVisibleCached = 0
 
+-- Pause state.
+-- When awaitingContinue is true, the next Enter keypress advances to the
+-- next pending segment rather than submitting a command.
+local awaitingContinue = false
+local pendingSegments  = {}   -- remaining text segments after [PAUSE] markers
+
 -- ---------------------------------------------------------------------------
 -- pushLine / printLines — the only functions that write to the buffer
 -- ---------------------------------------------------------------------------
@@ -101,6 +107,60 @@ local function printOutput(text)
         printLines(body, C.response)
     else
         printLines(text, C.response)
+    end
+end
+
+-- ---------------------------------------------------------------------------
+-- splitOnPause — splits text on [PAUSE] markers, trimming surrounding
+-- newlines from each segment. Empty segments are discarded.
+-- ---------------------------------------------------------------------------
+local function splitOnPause(text)
+    local segments = {}
+    local start = 1
+    while true do
+        local s, e = text:find("%[PAUSE%]", start)
+        if not s then
+            local seg = text:sub(start):match("^\n*(.-)\n*$")
+            if seg ~= "" then segments[#segments + 1] = seg end
+            break
+        end
+        local seg = text:sub(start, s - 1):match("^\n*(.-)\n*$")
+        if seg ~= "" then segments[#segments + 1] = seg end
+        start = e + 1
+    end
+    return segments
+end
+
+-- advancePause — shows the next pending segment, or clears paused state.
+local function advancePause()
+    if #pendingSegments == 0 then
+        awaitingContinue = false
+        return
+    end
+    local seg = table.remove(pendingSegments, 1)
+    pushLine("", C.system)
+    printOutput(seg)
+    if #pendingSegments > 0 then
+        pushLine("", C.system)
+        pushLine("[ Press Enter to continue ]", C.system)
+    else
+        awaitingContinue = false
+    end
+end
+
+-- processOutput — like printOutput but handles [PAUSE] markers.
+-- Use this for all output that reaches the player.
+local function processOutput(text)
+    if text == "" then return end
+    local segments = splitOnPause(text)
+    if #segments == 0 then return end
+    printOutput(segments[1])
+    if #segments > 1 then
+        pendingSegments = {}
+        for i = 2, #segments do pendingSegments[#pendingSegments + 1] = segments[i] end
+        pushLine("", C.system)
+        pushLine("[ Press Enter to continue ]", C.system)
+        awaitingContinue = true
     end
 end
 
@@ -187,15 +247,14 @@ function Terminal.submit(raw)
         -- restore clean world state so the game is still playable after tests
         World.reset()
         Parser.reset()
-        local intro = World.describeCurrentRoom()
         pushLine("", C.system)
-        printOutput(intro)
+        processOutput(World.describeCurrentRoom())
         return
     end
 
     local result = Parser.process(text)
     if result ~= "" then
-        printOutput(result)
+        processOutput(result)
     end
 end
 
@@ -210,12 +269,16 @@ function Terminal.init()
 
     love.window.setTitle("Diversion")
 
-    Loader.load()
+    local prologue = Loader.load()
     World.reset()
 
-    -- Show the starting room on startup (same as typing "look")
-    local intro = World.describeCurrentRoom()
-    printOutput(intro)
+    -- Show prologue (if any) then the starting room description.
+    local roomDesc = World.describeCurrentRoom()
+    if prologue and prologue ~= "" then
+        processOutput(prologue .. "\n[PAUSE]\n" .. roomDesc)
+    else
+        processOutput(roomDesc)
+    end
 end
 
 -- ---------------------------------------------------------------------------
@@ -223,6 +286,13 @@ end
 -- ---------------------------------------------------------------------------
 function Terminal.keypressed(key)
     if key == "return" or key == "kpenter" then
+        if awaitingContinue then
+            scrollOffset = 0
+            inputText   = ""
+            histIdx     = -1
+            advancePause()
+            return
+        end
         Terminal.submit(inputText)
         inputText   = ""
         histIdx     = -1

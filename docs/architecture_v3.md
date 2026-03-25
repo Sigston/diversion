@@ -1,12 +1,16 @@
-# Engine Architecture Reference — v2
+# Engine Architecture Reference — v3
 ## Diversion — Interactive Fiction Engine
 
 > **Runtimes:** Lua/LÖVE2D (local development) · TypeScript (web deployment)
 > **Data format:** JSON (runtime-agnostic, loaded by both runtimes)
 > **Design lineage:** Informed by TADS 3 adv3Lite, particularly its three-phase
-> execution model and disambiguation-by-logicalness approach.
-> **Changelog:** v2 incorporates corrections identified in `docs/tads3-adv3lite-reference.md`.
-> See Section 18 of `docs/architecture.md` for a full explanation of each change.
+> execution model, disambiguation-by-logicalness approach, and room description
+> compositor pattern.
+> **Changelog:** v3 incorporates the room description compositor design
+> (Section 16 substantially expanded), `mentioned` flag, `specialDesc`/
+> `initSpecialDesc` object properties, dark room handling, and `stateDesc`
+> for Examine. See Section 18 of `docs/architecture_v2.md` for the analysis
+> that produced these decisions.
 
 ---
 
@@ -53,8 +57,19 @@
     - 15.2 [Cross-Period Inventory](#152-cross-period-inventory)
     - 15.3 [Telescope](#153-telescope)
     - 15.4 [Revisitable Periods](#154-revisitable-periods)
-16. [Known Extension Points](#16-known-extension-points)
-17. [TADS 3 Design Influences](#17-tads-3-design-influences)
+16. [Room Description Compositor](#16-room-description-compositor)
+    - 16.1 [describeCurrentRoom — the master compositor](#161-describecurrentroom--the-master-compositor)
+    - 16.2 [The Four-Stage Listing Model](#162-the-four-stage-listing-model)
+    - 16.3 [specialDesc and initSpecialDesc](#163-specialdesc-and-initspecialdesc)
+    - 16.4 [The mentioned Flag](#164-the-mentioned-flag)
+    - 16.5 [Object Listing Properties](#165-object-listing-properties)
+    - 16.6 [Exit Listing](#166-exit-listing)
+    - 16.7 [Dark Room Handling](#167-dark-room-handling)
+    - 16.8 [stateDesc — Examine State Suffix](#168-statedesc--examine-state-suffix)
+    - 16.9 [Narrator Integration](#169-narrator-integration)
+    - 16.10 [Open Design Questions](#1610-open-design-questions)
+17. [Known Extension Points](#17-known-extension-points)
+18. [TADS 3 Design Influences](#18-tads-3-design-influences)
 
 ---
 
@@ -88,14 +103,18 @@ is pure JSON. No engine module is referenced from game data. Dependencies flow
 downward only: presentation → parser → world → data.
 
 **Room descriptions are functions, not strings.** Descriptions take a context
-argument (at minimum: current state flags relevant to that room) and return a
-string. Never read a description as a plain property.
+argument (at minimum: `firstVisit`, current state flags, and an `exclude()`
+helper) and return a string. Never read a description as a plain property.
 
 **Exits may be functions.** An exit value may be a string (room key) or a
 callable that returns a string or null/nil. The `go` handler must check type and
 call accordingly. A null return means the exit is present but not currently
 traversable — return a specific message from the blocking object, not a generic
 fallback.
+
+**`describeCurrentRoom()` is the single compositor.** All LOOK output assembles
+inside `describeCurrentRoom()`. No other function writes parts of a room
+description. See Section 16.
 
 ---
 
@@ -144,7 +163,8 @@ fallback.
 ├── CLAUDE.md                         session briefing, updated each session
 ├── docs/
 │   ├── architecture.md               v1 with change log appended
-│   ├── architecture_v2.md            this document
+│   ├── architecture_v2.md            v2 with v3 suggestions in Section 18
+│   ├── architecture_v3.md            this document (canonical)
 │   ├── tads3-adv3lite-reference.md   source research document
 │   └── [game design docs]            not engine concerns
 │
@@ -160,7 +180,7 @@ fallback.
 │   │   │   ├── resolver.lua
 │   │   │   └── dispatcher.lua
 │   │   ├── world/
-│   │   │   ├── world.lua             world model, scope queries
+│   │   │   ├── world.lua             world model, scope queries, compositor
 │   │   │   ├── state.lua             flags, save/load
 │   │   │   └── defaults.lua          default verb handlers
 │   │   └── lexicon/
@@ -498,18 +518,6 @@ threshold, meaning it loses auto-selection to a logical candidate but is
 preferred over illogical ones. `nonObvious` (rank 30) ties with `illogical`,
 meaning it never wins auto-selection against any logical candidate.
 
-**Example:**
-```lua
-objects["iron_door"].handlers.open = {
-    verify = function(self, intent)
-        if self.open then
-            return { illogicalNow = "The door is already open." }
-        end
-        return { logical = true, rank = 150 }  -- prefer closed doors
-    end,
-}
-```
-
 > **Rule:** `verify()` must never call `World.move()`, change object properties,
 > modify state flags, or produce any output. It is a pure read-only query.
 > It must never read `intent.dobjRef` or `intent.iobjRef` (see Section 4.4).
@@ -534,11 +542,6 @@ objects["black_box"].handlers.open = {
     end,
 }
 ```
-
-The distinction from `verify()`: the player cannot know the box is glued until
-they try. If this condition were in `verify()`, the resolver might steer around
-the black box silently during disambiguation — the player would never see the
-"glued shut" message, which is the point.
 
 **Design rule:** "Would a reasonable player consider this *obviously* the wrong
 thing to try?" If yes → verify. If no → check.
@@ -642,8 +645,8 @@ manually delegate to `intent.iobjRef.handlers[verb]`.
 ```lua
 rooms["player_quarters"] = {
     name        = "Your Quarters",
-    description = function(ctx)
-        -- ctx contains relevant state flags
+    description = function(self, ctx)
+        -- ctx.firstVisit, ctx.exclude(), and relevant state flags
         if ctx.firstVisit then
             return "Long description on first visit..."
         end
@@ -652,7 +655,6 @@ rooms["player_quarters"] = {
     exits   = {
         north = "observation_deck",
         down  = function()
-            -- Exits may be functions returning a room key or nil
             if State.get("time_machine_ready") then
                 return "time_machine_chamber"
             end
@@ -662,11 +664,31 @@ rooms["player_quarters"] = {
     objects  = { "telescope", "time_machine", "writing_desk" },
     handlers = {},      -- room-level verb intercepts
     visited  = false,
+    isLit    = true,    -- false for dark rooms
+    darkName = nil,     -- title override when dark (default "In the dark")
+    darkDesc = nil,     -- body override when dark (default standard message)
+    suppressListing = false,  -- true for cutscene rooms / time machine interior
     on_enter = function()
         -- Optional: fires on entry, return string or nil
     end,
 }
 ```
+
+**Room properties:**
+
+| Property | Type | Default | Meaning |
+|---|---|---|---|
+| `name` | string | — | Display name (bold title) |
+| `description` | function(self, ctx) | — | Room body text. ctx includes `firstVisit` and `exclude()`. |
+| `exits` | table | — | Direction → room key or function |
+| `objects` | array | — | Keys of objects present in this room |
+| `handlers` | table | `{}` | Room-level verb intercepts |
+| `visited` | bool | false | Has the player been here? Set by compositor. |
+| `isLit` | bool | true | Room provides ambient light. False for dark rooms. |
+| `darkName` | string | "In the dark" | Title override when dark |
+| `darkDesc` | string/fn | standard | Body when dark. Default: standard darkness message. |
+| `suppressListing` | bool | false | Suppress object and exit listing (cutscenes, time machine). |
+| `on_enter` | function | nil | Hook called on room entry. |
 
 ---
 
@@ -687,6 +709,33 @@ rooms["player_quarters"] = {
 
 - Neither set (default) — Object is fully portable.
 
+**Room listing properties:**
+
+- `listed` (bool, default `true`) — Object appears in the misc-items sentence
+  at Stage 2 of the listing. Set `false` to suppress the object from all
+  automatic listing. Fixed objects default to `listed = false`.
+
+- `specialDesc` (string or handler reference, default nil) — An authored
+  paragraph shown before or after the misc-items sentence. When defined,
+  replaces the object's appearance in the `listed` sentence. The object gets
+  its own paragraph instead.
+
+- `initSpecialDesc` (string or handler reference, default nil) — Like
+  `specialDesc` but active only until the object has been moved (`moved = true`).
+  Typical use: objects discovered in a specific arrangement ("A brass key lies
+  beneath the mat."). Once moved, suppressed permanently.
+
+- `specialDescBeforeContents` (bool, default `true`) — Controls which stage
+  the specialDesc appears in: `true` = Stage 1 (before misc items), `false` =
+  Stage 4 (after misc items). NPCs and characters should use `false`.
+
+- `specialDescOrder` (number, default 100) — Sort order within Stage 1 or
+  Stage 4. Lower numbers appear first.
+
+- `stateDesc` (string or handler reference, default nil) — A state description
+  appended after the object's `description` during **Examine only**. Not shown
+  during room LOOK. Conveys mutable state: "It is lit.", "The drawer is open."
+
 ```lua
 objects["iron_key"] = {
     name        = "iron key",
@@ -694,18 +743,13 @@ objects["iron_key"] = {
     adjectives  = { "iron", "corroded", "small", "old" },
     description = "An iron key. The bow is cast in the form of a running hare.",
     location    = nil,
-    fixed       = nil,      -- not fixed; default
-    portable    = true,     -- default; fully portable
-    handlers    = {
-        examine = {
-            action = function(self, intent)
-                return self.description
-            end,
-        },
-    },
+    fixed       = nil,
+    portable    = true,
+    listed      = true,
+    mentioned   = false,    -- runtime flag; reset each LOOK
+    handlers    = { ... },
     narratorResponses = {
         take    = "How convenient that you found it.",
-        examine = nil,
     },
 }
 
@@ -714,9 +758,14 @@ objects["writing_desk"] = {
     aliases     = { "desk" },
     adjectives  = { "writing", "large", "wooden" },
     description = "A large wooden writing desk.",
+    stateDesc   = nil,      -- no dynamic state suffix
     location    = "player_quarters",
-    fixed       = nil,      -- not fixed: player would logically try to take it
-    portable    = false,    -- check failure: too heavy to lift
+    fixed       = nil,
+    portable    = false,
+    listed      = false,    -- covered by room prose; don't list separately
+    specialDesc = "A large writing desk stands beneath the window.",
+    specialDescBeforeContents = true,
+    specialDescOrder = 100,
     handlers    = {},
 }
 
@@ -726,7 +775,8 @@ objects["wall_sconce"] = {
     adjectives  = { "wall", "iron" },
     description = "An iron sconce fixed to the wall.",
     location    = "player_quarters",
-    fixed       = true,     -- verify failure: obviously part of the room
+    fixed       = true,
+    listed      = false,    -- fixed objects not listed
     handlers    = {},
 }
 ```
@@ -827,6 +877,8 @@ return {
     },
     "objects": ["telescope", "time_machine", "writing_desk"],
     "onEnter": "handlers.rooms.playerQuarters.onEnter",
+    "isLit": true,
+    "suppressListing": false,
     "narratorResponses": {
       "look": "What a pleasure it is to be home."
     }
@@ -851,15 +903,10 @@ the handler registry. The loader resolves these at startup.
     "location": null,
     "fixed": false,
     "portable": true,
-    "properties": {
-      "organic": true
-    },
+    "listed": true,
     "handlers": {
       "examine": {
         "action": "handlers.objects.ironKey.examine"
-      },
-      "take": {
-        "action": "handlers.objects.ironKey.takeAction"
       }
     },
     "narratorResponses": {
@@ -874,6 +921,10 @@ the handler registry. The loader resolves these at startup.
     "location": "player_quarters",
     "fixed": false,
     "portable": false,
+    "listed": false,
+    "specialDesc": "A large writing desk stands beneath the window.",
+    "specialDescBeforeContents": true,
+    "specialDescOrder": 100,
     "handlers": {}
   },
   "wall_sconce": {
@@ -883,12 +934,34 @@ the handler registry. The loader resolves these at startup.
     "description": "An iron sconce fixed to the wall.",
     "location": "player_quarters",
     "fixed": true,
+    "listed": false,
+    "handlers": {}
+  },
+  "oil_lamp": {
+    "name": "oil lamp",
+    "aliases": ["lamp"],
+    "adjectives": ["oil", "brass"],
+    "description": "A brass oil lamp.",
+    "stateDesc": "handlers.objects.oilLamp.stateDesc",
+    "location": "player_quarters",
+    "fixed": false,
+    "portable": true,
+    "listed": true,
     "handlers": {}
   }
 }
 ```
 
-**Condition table syntax** — for simple logic that doesn't require a named handler:
+**Handler reference for specialDesc.** If the specialDesc needs to be dynamic
+(changes based on game state), use a handler reference:
+
+```json
+"specialDesc": "handlers.objects.writingDesk.specialDesc"
+```
+
+Plain string specialDescs are also supported and resolved as literals.
+
+**Condition table syntax** — for simple logic without a named handler:
 
 ```json
 "handlers": {
@@ -899,13 +972,6 @@ the handler registry. The loader resolves these at startup.
       "property": "fixed",
       "value": true,
       "illogical": "That's part of the room."
-    },
-    "check": {
-      "type": "propertyCheck",
-      "object": "self",
-      "property": "portable",
-      "value": false,
-      "block": "That's not something you can pick up."
     },
     "action": "handlers.defaults.take"
   }
@@ -1246,10 +1312,25 @@ Defaults["drop"] = {
 
 Defaults["examine"] = {
     action = function(obj, intent)
+        local desc
         if type(obj.description) == "function" then
-            return obj.description(obj, World.currentContext())
+            desc = obj.description(obj, World.currentContext())
+        else
+            desc = obj.description or "You see nothing special about it."
         end
-        return obj.description or "You see nothing special about it."
+        -- Append stateDesc if present
+        if obj.stateDesc then
+            local state
+            if type(obj.stateDesc) == "function" then
+                state = obj.stateDesc(obj)
+            else
+                state = obj.stateDesc
+            end
+            if state and state ~= "" then
+                desc = desc .. " " .. state
+            end
+        end
+        return desc
     end,
 }
 
@@ -1376,7 +1457,413 @@ at load time when the condition is met.
 
 ---
 
-## 16. Known Extension Points
+## 16. Room Description Compositor
+
+`World.describeCurrentRoom()` is the single entry point for all room output.
+It owns the complete assembly. No other function writes parts of a room description.
+
+This section replaces the preliminary design in v2 Section 16.1 with a complete
+specification, informed by adv3Lite's `lookAroundWithin()` model (see
+`docs/tads3-adv3lite-reference.md` Section 12).
+
+---
+
+### 16.1 describeCurrentRoom — the master compositor
+
+```lua
+function World.describeCurrentRoom()
+    local room = World.currentRoom()
+    local parts = {}
+
+    -- Step 1: Reset mentioned flags on all objects in this room
+    World.unmentionAll(room)
+
+    -- Step 2: Room title
+    -- (terminal layer colours this differently; always included)
+    local title = room.isLit ~= false and room.name
+                  or (room.darkName or "In the dark")
+    table.insert(parts, title)
+
+    -- Step 3: Dark branch
+    if not World.isIlluminated(room) then
+        local darkDesc = room.darkDesc or "It is pitch black; you can't see a thing."
+        if type(darkDesc) == "function" then darkDesc = darkDesc(room) end
+        table.insert(parts, darkDesc)
+        return table.concat(parts, "\n")
+        -- No listing, no exits in darkness
+    end
+
+    -- Step 4: Room description body (first-visit or revisit)
+    local ctx = World.buildContext(room)    -- includes firstVisit, exclude() helper
+    local desc = room.description(room, ctx)
+    table.insert(parts, desc)
+
+    -- Step 5: Four-stage listing (unless suppressed)
+    if not room.suppressListing then
+        local listing = World.listContents(room, ctx)
+        if listing then table.insert(parts, listing) end
+    end
+
+    -- Step 6: Exit list (unless suppressed)
+    if not room.suppressListing then
+        local exits = World.listExits(room)
+        if exits then table.insert(parts, exits) end
+    end
+
+    -- Step 7: Mark room as visited
+    room.visited = true
+
+    return table.concat(parts, "\n\n")
+end
+```
+
+**`ctx` — the description context object:**
+
+```lua
+ctx = {
+    firstVisit = not room.visited,    -- true on very first description
+    excluded   = {},                  -- set by ctx.exclude()
+    exclude    = function(key)        -- call from description fn to suppress obj
+        ctx.excluded[key] = true
+    end,
+}
+```
+
+When the description function calls `ctx.exclude("writing_desk")`, the writing
+desk is added to `ctx.excluded`. The listing passes treat excluded objects as
+already mentioned.
+
+---
+
+### 16.2 The Four-Stage Listing Model
+
+`World.listContents(room, ctx)` runs four ordered passes:
+
+```lua
+function World.listContents(room, ctx)
+    local firstSpecial = {}    -- Stage 1: specialDesc, before misc
+    local misc         = {}    -- Stage 2: ordinary listed items
+    -- Stage 3: sub-contents handled inside Stage 2 rendering
+    local secondSpecial = {}   -- Stage 4: specialDesc, after misc
+
+    -- Categorise objects in this room
+    for _, key in ipairs(room.objects) do
+        local obj = objects[key]
+        if not obj.mentioned and not ctx.excluded[key] then
+            if World.hasActiveSpecialDesc(obj) then
+                if obj.specialDescBeforeContents ~= false then
+                    table.insert(firstSpecial, obj)
+                else
+                    table.insert(secondSpecial, obj)
+                end
+            elseif obj.listed ~= false and obj.location == World.currentRoomKey() then
+                table.insert(misc, obj)
+            end
+        end
+    end
+
+    -- Sort special lists by specialDescOrder
+    table.sort(firstSpecial,  function(a,b) return (a.specialDescOrder or 100) < (b.specialDescOrder or 100) end)
+    table.sort(secondSpecial, function(a,b) return (a.specialDescOrder or 100) < (b.specialDescOrder or 100) end)
+
+    local result = {}
+
+    -- Stage 1: firstSpecial paragraphs
+    for _, obj in ipairs(firstSpecial) do
+        table.insert(result, World.showSpecialDesc(obj))
+    end
+
+    -- Stage 2: misc items sentence + Stage 3: sub-contents
+    if #misc > 0 then
+        table.insert(result, World.buildMiscSentence(misc))
+    end
+
+    -- Stage 4: secondSpecial paragraphs
+    for _, obj in ipairs(secondSpecial) do
+        table.insert(result, World.showSpecialDesc(obj))
+    end
+
+    if #result == 0 then return nil end
+    return table.concat(result, "\n\n")
+end
+```
+
+**`World.hasActiveSpecialDesc(obj)`:**
+```lua
+function World.hasActiveSpecialDesc(obj)
+    if obj.initSpecialDesc and not obj.moved then return true end
+    if obj.specialDesc then return true end
+    return false
+end
+```
+
+**`World.showSpecialDesc(obj)`:**
+```lua
+function World.showSpecialDesc(obj)
+    local text
+    if obj.initSpecialDesc and not obj.moved then
+        text = obj.initSpecialDesc
+    else
+        text = obj.specialDesc
+    end
+    if type(text) == "function" then text = text(obj) end
+    obj.mentioned = true
+    return text
+end
+```
+
+**`World.buildMiscSentence(misc)`:**
+```lua
+function World.buildMiscSentence(misc)
+    -- "You can also see: an iron key, a writing desk."
+    local names = {}
+    for _, obj in ipairs(misc) do
+        table.insert(names, obj.name)
+        obj.mentioned = true
+    end
+    if #names == 1 then
+        return "You can also see: " .. names[1] .. "."
+    end
+    local last = table.remove(names)
+    return "You can also see: " .. table.concat(names, ", ") .. ", and " .. last .. "."
+end
+```
+
+---
+
+### 16.3 specialDesc and initSpecialDesc
+
+Both cause an object to render its own dedicated paragraph in the room listing
+rather than appearing in the generic "You can also see..." sentence.
+
+**`specialDesc`** — active as long as defined. Shows every time the room is
+described. Use for objects that warrant authored prose rather than a list entry:
+large furniture, set-dressing, environmental detail.
+
+**`initSpecialDesc`** — active until `obj.moved` is set to true (i.e. until
+the player picks it up). Use for objects in a specific initial arrangement that
+should not persist once disturbed.
+
+If both are defined, `initSpecialDesc` shows while `!moved`; then `specialDesc`
+takes over permanently.
+
+**JSON representations:**
+
+Plain string (loaded as literal):
+```json
+"specialDesc": "A heavy oak writing desk stands beneath the window."
+```
+
+Handler reference (dynamic, reads state):
+```json
+"specialDesc": "handlers.objects.writingDesk.specialDesc"
+```
+
+The handler returns a string. It may read object state or world state to vary
+the paragraph.
+
+---
+
+### 16.4 The mentioned Flag
+
+`mentioned` is a runtime boolean on every object. It is the sole
+anti-duplication mechanism across the room listing.
+
+**Reset:** At the start of every `describeCurrentRoom()` call:
+```lua
+function World.unmentionAll(room)
+    for _, key in ipairs(room.objects) do
+        objects[key].mentioned = false
+    end
+end
+```
+
+**Set:** In `showSpecialDesc()` and `buildMiscSentence()`, on every object
+that is displayed.
+
+**Author-side:** A room description function can call `ctx.exclude("key")` to
+suppress an object that the prose already mentions by name. This is the
+`mentioned` mechanism from the author's perspective — the explicit prose
+reference *is* the listing for that object.
+
+```lua
+description = function(self, ctx)
+    ctx.exclude("writing_desk")  -- prose mentions it; don't list separately
+    return "The heavy oak desk near the window..."
+end
+```
+
+---
+
+### 16.5 Object Listing Properties
+
+| Property | Type | Default | Meaning |
+|---|---|---|---|
+| `listed` | bool | true | Appear in Stage 2 misc-items sentence. `false` = never listed. Fixed objects default to `false`. |
+| `mentioned` | bool | false (runtime) | Anti-duplication flag. Reset each LOOK. Set by any listing that displays the object. |
+| `specialDesc` | string / handler | nil | Dedicated paragraph in Stage 1 or 4. Overrides `listed`. |
+| `initSpecialDesc` | string / handler | nil | Like `specialDesc` but only until `moved = true`. |
+| `specialDescBeforeContents` | bool | true | `true` = Stage 1 (before misc); `false` = Stage 4 (after misc). |
+| `specialDescOrder` | number | 100 | Sort order within Stage 1 or Stage 4. Lower = earlier. |
+| `stateDesc` | string / handler | nil | Appended after `description` during **Examine only**. Not in LOOK. |
+
+---
+
+### 16.6 Exit Listing
+
+`World.listExits(room)` is a standalone function, separate from the contents
+listing. It runs as Step 6 of the compositor, after the four-stage listing.
+
+```lua
+function World.listExits(room)
+    local available = {}
+    for dir, exit in pairs(room.exits) do
+        if World.exitIsTraversable(room, dir) then
+            table.insert(available, dir)
+        end
+    end
+    if #available == 0 then return nil end
+    table.sort(available)   -- consistent ordering
+    return "Exits: " .. table.concat(available, ", ") .. "."
+end
+
+function World.exitIsTraversable(room, dir)
+    local exit = room.exits[dir]
+    if exit == nil then return false end
+    if type(exit) == "function" then
+        exit = exit()
+    end
+    return exit ~= nil
+end
+```
+
+**Design decisions:**
+
+- Blocked exits (exit function returns nil) are **not listed**. The player
+  discovers blocked exits by trying. The exit list reflects what the player can
+  currently do.
+- Directions are listed in alphabetical order for consistency.
+- Destination room names are **not** listed — only direction words. The current
+  LOOK already describes the room; listing destination names would spoil
+  exploration.
+- The exit list is suppressed when `room.suppressListing = true`.
+
+**Enhancement (deferred to when door objects exist):** Connectors with a
+physical door that is closed-but-visible can surface a mention:
+"A locked door leads north." — deferred; implement when door objects are added.
+
+---
+
+### 16.7 Dark Room Handling
+
+When `World.isIlluminated(room)` returns false (no carried light source and
+`room.isLit` is false or nil), the compositor takes the dark branch:
+
+- Title shows `room.darkName` (default "In the dark")
+- Body shows `room.darkDesc` (default "It is pitch black; you can't see a thing.")
+- **No object listing**
+- **No exit listing**
+- Compositor returns immediately after darkDesc
+
+```lua
+function World.isIlluminated(room)
+    if room.isLit ~= false then return true end
+    -- Check carried light sources
+    for _, key in ipairs(World.getInventory()) do
+        local obj = objects[key]
+        if obj.isLit then return true end
+    end
+    return false
+end
+```
+
+**`isLit` on objects** is reserved for light-emitting objects (a lit lamp, a
+torch). Do not confuse with `room.isLit`.
+
+**All rooms in Milestone 4 are lit.** Dark room functionality is a reserved
+extension point. Add the properties to the schema now; implement the dark branch
+minimally (show darkDesc, suppress listing). Carriers and period-specific dark
+rooms can be added later.
+
+---
+
+### 16.8 stateDesc — Examine State Suffix
+
+`stateDesc` is shown after the object's main `description` during the Examine
+action **only**. It does not appear during room LOOK output.
+
+Use it to convey mutable object state that the player can see when examining:
+"It is lit.", "The drawer is open.", "The lock is engaged."
+
+State information visible during room LOOK comes through `specialDesc` (which
+can be a dynamic method reading object state).
+
+The Examine default handler appends `stateDesc`:
+
+```lua
+Defaults["examine"] = {
+    action = function(obj, intent)
+        local desc
+        if type(obj.description) == "function" then
+            desc = obj.description(obj, World.currentContext())
+        else
+            desc = obj.description or "You see nothing special about it."
+        end
+        if obj.stateDesc then
+            local state = type(obj.stateDesc) == "function"
+                          and obj.stateDesc(obj)
+                          or  obj.stateDesc
+            if state and state ~= "" then
+                desc = desc .. " " .. state
+            end
+        end
+        return desc
+    end,
+}
+```
+
+---
+
+### 16.9 Narrator Integration
+
+The narrator response layer interacts with the compositor at one point:
+
+**Room-level `narratorResponses.look`** overrides the description portion only
+(Step 4 of the compositor). The four-stage object listing and exit listing are
+always appended after the narrator response, unless `suppressListing = true`.
+
+```
+response = narratorResponses.look
+         or room.description(room, ctx)
+
+full output = title + "\n\n" + response + "\n\n" + listing + "\n\n" + exits
+```
+
+This means the narrator can replace the room's prose voice without losing the
+automatic object and exit listing.
+
+---
+
+### 16.10 Open Design Questions
+
+These remain to be resolved during Milestone 4 implementation:
+
+- **Verbosity mode.** Should revisited rooms show the short description or just
+  the title + listing on entry via `go`? (adv3Lite supports a terse mode where
+  the desc is suppressed on revisit.) Decision deferred to implementation.
+
+- **Object sub-contents listing.** Stage 3 (sub-contents of in-room open
+  containers) is referenced but not fully specified. When a container is open
+  and in the room, do its contents appear as a parenthetical ("a wooden chest
+  (inside which is a copper coin)") or as a separate sentence? Decision deferred.
+
+- **Fixed/scenery objects in listing.** Should fixed objects with no `specialDesc`
+  ever appear in the misc listing? Current answer: no (`listed` defaults to
+  `false` for fixed objects). Confirm when authoring begins.
+
+---
+
+## 17. Known Extension Points
 
 | Feature | Approach | Status |
 |---|---|---|
@@ -1385,70 +1872,16 @@ at load time when the condition is met.
 | Undo stack | State snapshots before each action phase | Reserved |
 | Multiple commands per line | Tokeniser splits on `then` or `;` | Reserved |
 | AGAIN / G | Store last resolved intent; re-dispatch | Reserved |
-| Sense passing (light/dark) | Add context to scope query; descriptions take `lit` arg | Partially implemented in seed game |
+| Sense passing (light/dark) | `isIlluminated()` in compositor; dark branch in §16.7 | Designed |
 | Split iobj handler dispatch | Consult iobjRef's handler in runCycle for two-object verbs | Deferred; see §5.5 |
-| Room listing (objects + exits) | `World.describeCurrentRoom()` compositor; `listed` property on objects | Designed — see §16.1 |
+| Object sub-contents listing | Stage 3 of listContents; format TBD | Designed (incomplete) |
+| Connector / door model | Research TADS TravelConnector before implementing | Designed (outline in CLAUDE.md) |
+| Dark rooms | `isLit`, `darkName`, `darkDesc`; dark branch in compositor | Designed; deferred to M4 |
+| Verbosity mode (terse/verbose) | Gate in compositor before desc | Deferred to M4 |
 
 ---
 
-### 16.1 Room Listing (Objects and Exits)
-
-TADS adv3Lite automatically appends a contents list and exit list after the room
-description on `look` and on arrival via `go`. This engine will do the same.
-
-**`World.describeCurrentRoom()` becomes a compositor.** Currently it returns
-`name + "\n" + description`. When room listing is implemented it will call three
-sub-functions and assemble the result:
-
-```
-1. room.description(room, ctx)     -- authored room text (already implemented)
-2. World.listRoomContents(room)    -- auto-generated object listing
-3. World.listExits(room)           -- auto-generated exit listing
-```
-
-Both listing functions return a string or nil. The compositor concatenates
-non-nil parts with blank-line separators. `go` and `look` both call
-`describeCurrentRoom()` so both automatically receive the full listing.
-
-**Object `listed` property.** Objects have a `listed` boolean (default: `true`).
-Set `listed = false` for objects whose presence is already conveyed by the room
-description (e.g. a wall sconce described in the prose). The contents listing
-only shows objects in the current room — not inventory items.
-
-Format (to be finalised when implementing):
-```
-You can also see: an iron key, a writing desk.
-```
-
-**Exit listing.** Shows available directions as a simple sentence appended after
-the description:
-
-```
-Exits: north, east, down.
-```
-
-Locked or blocked exits (where the exit function returns nil) are omitted from
-the list by default. Doors and obstacles that warrant a mention (e.g. "A locked
-door leads north.") are a further enhancement, deferred until door objects are
-implemented.
-
-**Interaction with the narrator response layer.** Narrator responses at the room
-level override the `description` portion only. The object and exit listings are
-always appended unless the room sets `suppressListing = true` in its data (for
-cutscene-style rooms or the time machine interior).
-
-**Design questions still open (resolve when implementing):**
-- Does the exit list show room names as well as directions?
-- Are fixed/scenery objects listed separately from portable objects?
-- Should the listing be suppressed on revisit if nothing has changed?
-
-Do not implement room listing before Milestone 4. Do not make decisions in
-earlier milestones that would prevent `describeCurrentRoom()` from being extended
-into a compositor (it currently returns a single string — keep it that way).
-
----
-
-## 17. TADS 3 Design Influences
+## 18. TADS 3 Design Influences
 
 The following architectural patterns are derived from TADS 3 adv3Lite, reviewed
 against the official documentation. See `docs/tads3-adv3lite-reference.md` for
@@ -1469,198 +1902,20 @@ full notes.
 | Scope computed dynamically | adv3Lite world model | Not cached. Closed containers excluded; open ones recursively included. |
 | Auto-disambiguation before asking player | adv3Lite noun phrase resolution | Prefer the logical winner. Surface clarification only when genuinely tied. |
 | Parenthetical disambiguation announcement | adv3Lite parser | When auto-resolving from N>1 candidates, print "(the iron key)" before output. |
+| describeCurrentRoom() as master compositor | adv3Lite lookAroundWithin() | Single entry point; assembles all parts in fixed order. |
+| Four-stage listing (specialDesc before/after misc items) | adv3Lite listContents() | Stages 1–4; stage placement data-driven via specialDescBeforeContents. |
+| specialDesc / initSpecialDesc paragraphs | adv3Lite | Objects inject own prose paragraph rather than appearing in generic list. |
+| mentioned flag for anti-duplication | adv3Lite | Reset per LOOK; set when displayed; prevents objects appearing twice. |
+| isFixed → isListed cascade | adv3Lite | Fixed objects not listed by default; authors override at most specific level. |
+| stateDesc suffix for Examine | adv3Lite | Examine-only; dynamic state description. Not in LOOK output. |
+| Dark branch as complete replacement | adv3Lite | Darkness suppresses desc, listing, exits; shows darkDesc only. |
+| Exit lister decoupled from room | adv3Lite exits.t | Separate function; called at end of compositor. |
+| description as function receiving context | **Diversion improvement over adv3Lite** | adv3Lite uses roomFirstDesc + desc split; we use a single function with ctx.firstVisit. Better. |
+| ctx.exclude() for prose mentions | **Diversion improvement over adv3Lite** | adv3Lite uses <<exclude>> macros; we pass an exclude helper in ctx. |
 
 ---
 
-*End of architecture reference v2.*
-*This document supersedes `docs/architecture.md` for implementation purposes.*
-*`docs/architecture.md` is preserved as a record of the original design and the*
-*change log that produced this version.*
-
----
-
-## 18. Suggested Changes for v3 — Room Description Compositor
-
-*Added after researching adv3Lite's LOOK composition system (see*
-*`docs/tads3-adv3lite-reference.md` Section 12). These are design decisions*
-*to resolve before implementing Milestone 4 room listing.*
-
----
-
-### 18.1 Adopt the Four-Stage Listing Model
-
-adv3Lite's `listContents()` runs four ordered passes over the room's objects:
-
-| Stage | What | Controlled by |
-|---|---|---|
-| 1 | Objects with specialDesc, shown BEFORE misc items | `specialDescBeforeContents = true` |
-| 2 | Misc portable items, single "You also see..." sentence | `lookListed && !mentioned` |
-| 3 | Sub-contents of in-room open containers/supporters | recursive |
-| 4 | Objects with specialDesc, shown AFTER misc items | `specialDescBeforeContents = false` |
-
-**Recommendation:** Adopt this model. The current Section 16.1 describes a
-two-part compositor (desc + listing). Extend it to the four-stage model.
-
-The `specialDesc` mechanism (Stage 1/4) is the right way to handle objects
-that warrant their own prose paragraph rather than a generic mention in the
-list. This is important for the *Diversion* game: furniture, set-dressing, and
-environmental details should have authored paragraphs, not "You also see: a
-writing desk."
-
-**JSON representation for specialDesc:**
-
-```json
-"writing_desk": {
-    "specialDesc": "handlers.objects.writingDesk.specialDesc",
-    "specialDescBeforeContents": true,
-    "specialDescOrder": 100
-}
-```
-
-Plain-string specialDescs should also be supported:
-
-```json
-"writing_desk": {
-    "specialDesc": "A large writing desk dominates the centre of the room.",
-    "specialDescBeforeContents": true
-}
-```
-
----
-
-### 18.2 Adopt the `mentioned` Flag
-
-adv3Lite's sole anti-duplication mechanism is a `mentioned` boolean on every
-object. It is reset at the start of each LOOK and set when an object is
-displayed (by specialDesc or by the misc-items lister).
-
-**Recommendation:** Add `mentioned` as a runtime property on every object.
-Reset it in `describeCurrentRoom()` before listing passes begin. Set it in
-`showSpecialDesc()` and in the misc-items lister.
-
-**Author-side:** When the room's description prose explicitly mentions an
-object by name, that object should be excluded from the automatic listing.
-Mechanism: add a `mentioned` list to the room's description context, OR
-provide a helper that the description function can call:
-
-```lua
--- Option A: context-based exclusion
-description = function(self, ctx)
-    ctx.exclude("writing_desk")
-    return "The writing desk near the window holds ..."
-end
-
--- Option B: set on the object directly before listing
--- The description function sets room.mentioned["writing_desk"] = true
-```
-
-Option A is cleaner. The description function receives a context that includes
-an `exclude()` helper. The compositor reads `ctx.excluded` when categorising
-objects.
-
----
-
-### 18.3 Formalise `specialDesc` vs `listed` in JSON Schema
-
-Currently the schema has `listed` on objects (Section 16.1). Extend it:
-
-| Property | Type | Default | Meaning |
-|---|---|---|---|
-| `listed` | bool | `true` | Appears in misc-items listing (Stage 2). Set `false` to suppress entirely. |
-| `specialDesc` | string or handler ref | nil | Paragraph shown in Stage 1 or 4. Overrides `listed` — object won't appear in Stage 2. |
-| `specialDescBeforeContents` | bool | `true` | Stage 1 (before misc) if true; Stage 4 (after misc) if false. |
-| `specialDescOrder` | number | 100 | Sort order within Stage 1 or Stage 4. |
-| `initSpecialDesc` | string or handler ref | nil | Like specialDesc but suppressed once `moved = true`. For objects in a specific initial arrangement. |
-
----
-
-### 18.4 Retain `description` as a Function (Improvement on adv3Lite)
-
-adv3Lite uses `roomFirstDesc` as a separate property checked against the
-`visited` flag. This is clunky — the first-visit vs revisit logic must be
-split across two properties.
-
-The v2 architecture already makes a better decision: `description` is a
-function receiving a `ctx` argument that includes `firstVisit`. Authors
-express first-visit/revisit variation inside the function:
-
-```lua
-description = function(self, ctx)
-    if ctx.firstVisit then
-        return "Long description..."
-    end
-    return "Short description..."
-end
-```
-
-**Recommendation:** Keep this. Do not adopt adv3Lite's split `roomFirstDesc` +
-`desc` pattern. The function approach is superior and already in the codebase.
-
----
-
-### 18.5 Exit Listing — Blocking Exits
-
-adv3Lite hides exits from the exit list when a single-quoted string (a blocking
-message) is on the direction. This aligns with the current v2 design (Section
-16.1: "Locked or blocked exits are omitted from the list by default").
-
-**Recommendation:** Formalise this: an exit is only shown in the exit list
-when `World.exitIsTraversable(dir)` returns true. A blocked exit (exit function
-returns nil; a connector with a flag check) is not listed.
-
-This is the right player experience: the map should reflect what the player can
-do, not hint at exits they can't use. Discovery is through trying.
-
----
-
-### 18.6 Add Dark Room Handling
-
-Currently the engine has no concept of darkness. adv3Lite's dark branch is a
-complete replacement: when unlit, nothing is shown except `darkDesc`. No object
-listing, no exit listing.
-
-**Recommendation:** Add to rooms:
-- `isLit` (bool, default `true`) — room provides ambient light
-- `darkName` (string) — title shown when dark; default "In the dark"
-- `darkDesc` (string or handler) — body text when dark
-
-The compositor checks `isIlluminated()` (room.isLit OR a carried light source)
-and branches to the dark path if false.
-
-For v1 of the game (Milestone 4), all rooms are lit. Dark rooms are a
-reserved extension point. Add the properties to the schema now; implement the
-dark branch minimally (just show darkDesc, suppress listing).
-
----
-
-### 18.7 Add `stateDesc` to Objects (Examine Only)
-
-adv3Lite's `stateDesc` is shown after `desc` during Examine, not during LOOK.
-It conveys mutable object state: "It is lit.", "The drawer is open."
-
-**Recommendation:** Add `stateDesc` as a JSON-schema field on objects (string
-or handler reference). The Examine handler appends it after the main description.
-It does not appear in room LOOK output — state in room listings is handled by
-`specialDesc`.
-
-```json
-"oil_lamp": {
-    "description": "A brass oil lamp.",
-    "stateDesc": "handlers.objects.oilLamp.stateDesc"
-}
-```
-
----
-
-### 18.8 Summary of v3 Changes
-
-| Area | v2 | v3 |
-|---|---|---|
-| Room listing structure | Two-part (desc + listing) | Four-stage compositor |
-| Anti-duplication | Not yet designed | `mentioned` flag; reset per LOOK |
-| Object inline paragraphs | Not designed | `specialDesc` / `initSpecialDesc` |
-| Object exclusion from listing | `listed` bool only | `listed` + `specialDesc` + `mentioned` |
-| First-visit description | `description(ctx)` with `ctx.firstVisit` | Unchanged — keep as-is |
-| Dark rooms | Not implemented | `isLit`, `darkName`, `darkDesc`; dark branch in compositor |
-| Exit listing | Simple direction sentence | Unchanged format; formalise traversability check |
-| Object state in Examine | Not yet designed | `stateDesc` appended after `description` |
+*End of architecture reference v3.*
+*This document supersedes `docs/architecture_v2.md` for implementation purposes.*
+*`docs/architecture_v2.md` is preserved and includes the design analysis*
+*(Section 18) that produced the changes in this version.*

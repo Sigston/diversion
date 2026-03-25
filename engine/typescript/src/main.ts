@@ -1,10 +1,10 @@
 import './style.css'
 import { loadWorld } from './world/loader.ts'
+import { World }     from './world/world.ts'
 import { process }   from './parser/index.ts'
-import { runTests }  from './test/parserTest.ts'
 
 // Load world from JSON before any parser or world operations.
-loadWorld()
+const prologue = loadWorld()
 
 // ---------------------------------------------------------------------------
 // Colour palette — matches architecture doc §10 and Lua implementation.
@@ -31,6 +31,14 @@ const history: string[] = []
 let historyIndex = -1
 
 // ---------------------------------------------------------------------------
+// Pause state.
+// When awaitingContinue is true, the next Enter keypress advances to the
+// next pending segment rather than submitting a command.
+// ---------------------------------------------------------------------------
+let awaitingContinue  = false
+let pendingSegments: string[] = []
+
+// ---------------------------------------------------------------------------
 // print(text, colour)
 // The only function that writes to the output div.
 // Handles multi-line strings by splitting on newlines.
@@ -53,6 +61,72 @@ function print(text: string, colour: string): void {
 }
 
 // ---------------------------------------------------------------------------
+// splitOnPause — splits text on [PAUSE] markers, trimming surrounding
+// newlines from each segment. Empty segments are discarded.
+// ---------------------------------------------------------------------------
+function splitOnPause(text: string): string[] {
+    return text.split('[PAUSE]')
+        .map(s => s.replace(/^\n+|\n+$/g, ''))
+        .filter(s => s.length > 0)
+}
+
+// ---------------------------------------------------------------------------
+// advancePause — shows the next pending segment, or clears paused state.
+// ---------------------------------------------------------------------------
+function advancePause(): void {
+    if (pendingSegments.length === 0) {
+        awaitingContinue = false
+        return
+    }
+    const seg = pendingSegments.shift()!
+    print('', colours.system)
+    printOutput(seg)
+    if (pendingSegments.length > 0) {
+        print('', colours.system)
+        print('[ Press Enter to continue ]', colours.system)
+    } else {
+        awaitingContinue = false
+    }
+}
+
+// ---------------------------------------------------------------------------
+// printOutput — applies colour heuristics to parser output.
+// Room descriptions come as "Title\nBody"; the first short line without
+// sentence-ending punctuation is coloured as a room title.
+// ---------------------------------------------------------------------------
+function printOutput(text: string): void {
+    if (!text) return
+    const nl = text.indexOf('\n')
+    if (nl !== -1) {
+        const title = text.slice(0, nl)
+        const body  = text.slice(nl + 1)
+        if (title.length <= 40 && !/[.!?]/.test(title)) {
+            print(title, colours.roomTitle)
+            print(body,  colours.response)
+            return
+        }
+    }
+    print(text, colours.response)
+}
+
+// ---------------------------------------------------------------------------
+// processOutput — like printOutput but handles [PAUSE] markers.
+// Use this for all output that reaches the player.
+// ---------------------------------------------------------------------------
+function processOutput(text: string): void {
+    if (!text) return
+    const segments = splitOnPause(text)
+    if (segments.length === 0) return
+    printOutput(segments[0])
+    if (segments.length > 1) {
+        pendingSegments = segments.slice(1)
+        print('', colours.system)
+        print('[ Press Enter to continue ]', colours.system)
+        awaitingContinue = true
+    }
+}
+
+// ---------------------------------------------------------------------------
 // submit(raw)
 // Called when the player hits Enter.
 // ---------------------------------------------------------------------------
@@ -67,7 +141,7 @@ function submit(raw: string): void {
 
     const output_text = process(text)
     if (output_text !== '') {
-        print(output_text, colours.response)
+        processOutput(output_text)
     }
 }
 
@@ -76,6 +150,13 @@ function submit(raw: string): void {
 // ---------------------------------------------------------------------------
 input.addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.key === 'Enter') {
+        if (awaitingContinue) {
+            output.scrollTop = output.scrollHeight
+            input.value  = ''
+            historyIndex = -1
+            advancePause()
+            return
+        }
         submit(input.value)
         input.value = ''
     } else if (e.key === 'ArrowUp') {
@@ -117,9 +198,11 @@ window.visualViewport?.addEventListener('scroll', fitToViewport)
 fitToViewport()
 
 // ---------------------------------------------------------------------------
-// Startup: run tests, then show the game prompt.
+// Startup: show prologue (if any) then the starting room.
 // ---------------------------------------------------------------------------
-print('Diversion — parser test suite', colours.roomTitle)
-runTests(print, colours)
-print('', colours.system)
-print('Parser loaded. Type look, examine lamp, inventory, etc.', colours.system)
+const roomDesc = World.describeCurrentRoom()
+if (prologue) {
+    processOutput(prologue + '\n[PAUSE]\n' + roomDesc)
+} else {
+    processOutput(roomDesc)
+}

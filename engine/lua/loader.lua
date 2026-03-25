@@ -51,13 +51,16 @@ end
 
 -- ---------------------------------------------------------------------------
 -- Loader.load — public entry point. Call once before World.reset().
+-- Returns the intro string from events.json (empty string if none).
 -- ---------------------------------------------------------------------------
 function Loader.load()
     local roomsSrc   = readFile("game/data/rooms.json")
     local objectsSrc = readFile("game/data/objects.json")
+    local eventsSrc  = readFile("game/data/events.json")
 
     local roomsJson   = json.decode(roomsSrc)
     local objectsJson = json.decode(objectsSrc)
+    local eventsJson  = json.decode(eventsSrc)
 
     -- Build rooms table
     local rooms = {}
@@ -92,6 +95,7 @@ function Loader.load()
     end
 
     World.load(rooms, objects, roomsJson.startRoom)
+    return eventsJson.intro or ""
 end
 
 return Loader

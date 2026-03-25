@@ -9,6 +9,7 @@ import type { Room, GameObject, WorldContext } from '../types.ts'
 import { World } from './world.ts'
 import roomsJson  from '../../../../game/data/rooms.json'
 import objectsJson from '../../../../game/data/objects.json'
+import eventsJson from '../../../../game/data/events.json'
 
 // ---------------------------------------------------------------------------
 // JSON shape types — the raw data as it comes from the files.
@@ -46,8 +47,9 @@ function makeDescription(
 
 // ---------------------------------------------------------------------------
 // loadWorld — public entry point.
+// Returns the intro string from events.json (empty string if none).
 // ---------------------------------------------------------------------------
-export function loadWorld(): void {
+export function loadWorld(): string {
     const roomsData   = (roomsJson  as { startRoom: string; rooms: Record<string, RoomJson> })
     const objectsData = (objectsJson as Record<string, ObjectJson>)
 
@@ -81,4 +83,5 @@ export function loadWorld(): void {
     }
 
     World.load(rooms, objects, roomsData.startRoom)
+    return (eventsJson as { intro?: string }).intro ?? ''
 }

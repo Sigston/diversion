@@ -73,6 +73,11 @@ function Loader.load()
             handlers    = {},
             visited     = false,
         }
+        -- Optional room properties
+        if data.isLit          ~= nil then rooms[key].isLit          = data.isLit          end
+        if data.darkName       ~= nil then rooms[key].darkName       = data.darkName       end
+        if data.darkDesc       ~= nil then rooms[key].darkDesc       = data.darkDesc       end
+        if data.suppressListing ~= nil then rooms[key].suppressListing = data.suppressListing end
     end
 
     -- Build objects table
@@ -87,10 +92,16 @@ function Loader.load()
             portable    = data.portable,
             handlers    = {},
         }
-        -- Optional properties — only present when set in JSON
-        if data.fixed   ~= nil then obj.fixed   = data.fixed   end
-        if data.locked  ~= nil then obj.locked  = data.locked  end
-        if data.lockKey ~= nil then obj.lockKey = data.lockKey end
+        -- Optional object properties
+        if data.fixed                  ~= nil then obj.fixed                  = data.fixed                  end
+        if data.locked                 ~= nil then obj.locked                 = data.locked                 end
+        if data.lockKey                ~= nil then obj.lockKey                = data.lockKey                end
+        if data.listed                 ~= nil then obj.listed                 = data.listed                 end
+        if data.specialDesc            ~= nil then obj.specialDesc            = data.specialDesc            end
+        if data.initSpecialDesc        ~= nil then obj.initSpecialDesc        = data.initSpecialDesc        end
+        if data.specialDescBeforeContents ~= nil then obj.specialDescBeforeContents = data.specialDescBeforeContents end
+        if data.specialDescOrder       ~= nil then obj.specialDescOrder       = data.specialDescOrder       end
+        if data.stateDesc              ~= nil then obj.stateDesc              = data.stateDesc              end
         objects[key] = obj
     end
 

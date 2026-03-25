@@ -3,7 +3,9 @@
 // Define once here; import everywhere else.
 
 export interface WorldContext {
-    // Extended in later milestones: lit, period, flags, etc.
+    firstVisit?: boolean
+    excluded?:   Record<string, boolean>
+    exclude?:    (key: string) => void
 }
 
 export interface GameObject {
@@ -16,16 +18,28 @@ export interface GameObject {
     portable:    boolean
     locked?:     boolean
     lockKey?:    string
+    listed?:     boolean
+    mentioned?:  boolean
+    moved?:      boolean
+    specialDesc?:              string | ((self: GameObject) => string)
+    initSpecialDesc?:          string | ((self: GameObject) => string)
+    specialDescBeforeContents?: boolean
+    specialDescOrder?:         number
+    stateDesc?:                string | ((self: GameObject) => string)
     handlers:    Record<string, Handler>
 }
 
 export interface Room {
-    name:        string
-    description: (self: Room, ctx: WorldContext) => string
-    exits:       Record<string, string | (() => string | null)>
-    objects:     string[]
-    handlers:    Record<string, Handler>
-    visited:     boolean
+    name:             string
+    description:      (self: Room, ctx: WorldContext) => string
+    exits:            Record<string, string | (() => string | null)>
+    objects:          string[]
+    handlers:         Record<string, Handler>
+    visited:          boolean
+    isLit?:           boolean
+    darkName?:        string
+    darkDesc?:        string | ((self: Room) => string)
+    suppressListing?: boolean
 }
 
 export type VerifyResult =

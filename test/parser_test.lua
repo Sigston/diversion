@@ -55,24 +55,30 @@ local function run(printFn)
 
     -- -----------------------------------------------------------------------
     header("look")
+    -- player_quarters has one exit: north. Objects all have listed=false.
     -- -----------------------------------------------------------------------
 
-    check("look gives room title",
+    check("look gives room title and description",
         "look",
         "Your Quarters\n" ..
         "Your quarters are exactly as you left them — which is to " ..
         "say, arranged with the particular chaos of someone who " ..
         "knows where everything is. The writing desk dominates one " ..
         "wall. An oil lamp sits where you last set it down. " ..
-        "Somewhere nearby, an iron key catches the light.")
+        "Somewhere nearby, an iron key catches the light." ..
+        "\n\nExits: north.")
 
     check("second look gives short description",
         "look",
-        "Your Quarters\nYour quarters. The writing desk, the lamp, the key.")
+        "Your Quarters\n" ..
+        "Your quarters. The writing desk, the lamp, the key." ..
+        "\n\nExits: north.")
 
     check("l is a synonym for look",
         "l",
-        "Your Quarters\nYour quarters. The writing desk, the lamp, the key.")
+        "Your Quarters\n" ..
+        "Your quarters. The writing desk, the lamp, the key." ..
+        "\n\nExits: north.")
 
     -- -----------------------------------------------------------------------
     header("inventory")
@@ -155,11 +161,14 @@ local function run(printFn)
         "go north",
         "Entrance Passage\n" ..
         "A narrow stone passage leads away from your quarters. " ..
-        "Bare walls, bare floor. The way back is to the south.")
+        "Bare walls, bare floor. The way back is to the south." ..
+        "\n\nExits: south.")
 
     check("second look in new room gives short desc",
         "look",
-        "Entrance Passage\nThe entrance passage. Bare stone.")
+        "Entrance Passage\n" ..
+        "The entrance passage. Bare stone." ..
+        "\n\nExits: south.")
 
     check("go east blocked (no exit in entrance passage)",
         "go east",
@@ -167,7 +176,9 @@ local function run(printFn)
 
     check("go south returns to player quarters",
         "go south",
-        "Your Quarters\nYour quarters. The writing desk, the lamp, the key.")
+        "Your Quarters\n" ..
+        "Your quarters. The writing desk, the lamp, the key." ..
+        "\n\nExits: north.")
 
     -- -----------------------------------------------------------------------
     header("bare directions")
@@ -176,15 +187,21 @@ local function run(printFn)
 
     check("bare 'north' moves room",
         "north",
-        "Entrance Passage\nThe entrance passage. Bare stone.")
+        "Entrance Passage\n" ..
+        "The entrance passage. Bare stone." ..
+        "\n\nExits: south.")
 
     check("bare 's' abbreviation moves back",
         "s",
-        "Your Quarters\nYour quarters. The writing desk, the lamp, the key.")
+        "Your Quarters\n" ..
+        "Your quarters. The writing desk, the lamp, the key." ..
+        "\n\nExits: north.")
 
     check("bare 'n' abbreviation moves again",
         "n",
-        "Entrance Passage\nThe entrance passage. Bare stone.")
+        "Entrance Passage\n" ..
+        "The entrance passage. Bare stone." ..
+        "\n\nExits: south.")
 
     check("bare direction with no exit",
         "east",
@@ -192,7 +209,9 @@ local function run(printFn)
 
     check("bare 'south' returns home",
         "south",
-        "Your Quarters\nYour quarters. The writing desk, the lamp, the key.")
+        "Your Quarters\n" ..
+        "Your quarters. The writing desk, the lamp, the key." ..
+        "\n\nExits: north.")
 
     -- -----------------------------------------------------------------------
     header("disambiguation")

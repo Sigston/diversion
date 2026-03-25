@@ -41,12 +41,25 @@ Defaults["examine"] = {
     end,
 
     action = function(obj, _intent)
-        -- description may be a plain string or a function.
-        -- Rule 5 from CLAUDE.md: always call it as a function if it is one.
+        local desc
         if type(obj.description) == "function" then
-            return obj.description(obj, World.currentContext())
+            desc = obj.description(obj, World.currentContext())
+        else
+            desc = obj.description or "You see nothing special about it."
         end
-        return obj.description or "You see nothing special about it."
+        -- Append stateDesc if present (Examine only — not shown during LOOK).
+        if obj.stateDesc then
+            local state
+            if type(obj.stateDesc) == "function" then
+                state = obj.stateDesc(obj)
+            else
+                state = obj.stateDesc
+            end
+            if state and state ~= "" then
+                desc = desc .. " " .. state
+            end
+        end
+        return desc
     end,
 }
 

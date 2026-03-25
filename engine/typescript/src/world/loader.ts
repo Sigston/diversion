@@ -15,10 +15,14 @@ import eventsJson from '../../../../game/data/events.json'
 // JSON shape types — the raw data as it comes from the files.
 // ---------------------------------------------------------------------------
 interface RoomJson {
-    name:        string
-    description: string | { firstVisit: string; revisit: string }
-    exits:       Record<string, string>
-    objects:     string[]
+    name:             string
+    description:      string | { firstVisit: string; revisit: string }
+    exits:            Record<string, string>
+    objects:          string[]
+    isLit?:           boolean
+    darkName?:        string
+    darkDesc?:        string
+    suppressListing?: boolean
 }
 
 interface ObjectJson {
@@ -31,6 +35,12 @@ interface ObjectJson {
     fixed?:      boolean
     locked?:     boolean
     lockKey?:    string
+    listed?:     boolean
+    specialDesc?:              string
+    initSpecialDesc?:          string
+    specialDescBeforeContents?: boolean
+    specialDescOrder?:         number
+    stateDesc?:                string
 }
 
 // ---------------------------------------------------------------------------
@@ -55,7 +65,7 @@ export function loadWorld(): string {
 
     const rooms: Record<string, Room> = {}
     for (const [key, data] of Object.entries(roomsData.rooms)) {
-        rooms[key] = {
+        const room: Room = {
             name:        data.name,
             description: makeDescription(data.description),
             exits:       data.exits   ?? {},
@@ -63,6 +73,11 @@ export function loadWorld(): string {
             handlers:    {},
             visited:     false,
         }
+        if (data.isLit          !== undefined) room.isLit          = data.isLit
+        if (data.darkName       !== undefined) room.darkName       = data.darkName
+        if (data.darkDesc       !== undefined) room.darkDesc       = data.darkDesc
+        if (data.suppressListing !== undefined) room.suppressListing = data.suppressListing
+        rooms[key] = room
     }
 
     const objects: Record<string, GameObject> = {}
@@ -76,9 +91,15 @@ export function loadWorld(): string {
             portable:    data.portable,
             handlers:    {},
         }
-        if (data.fixed   !== undefined) obj.fixed   = data.fixed
-        if (data.locked  !== undefined) obj.locked  = data.locked
-        if (data.lockKey !== undefined) obj.lockKey = data.lockKey
+        if (data.fixed                   !== undefined) obj.fixed                   = data.fixed
+        if (data.locked                  !== undefined) obj.locked                  = data.locked
+        if (data.lockKey                 !== undefined) obj.lockKey                 = data.lockKey
+        if (data.listed                  !== undefined) obj.listed                  = data.listed
+        if (data.specialDesc             !== undefined) obj.specialDesc             = data.specialDesc
+        if (data.initSpecialDesc         !== undefined) obj.initSpecialDesc         = data.initSpecialDesc
+        if (data.specialDescBeforeContents !== undefined) obj.specialDescBeforeContents = data.specialDescBeforeContents
+        if (data.specialDescOrder        !== undefined) obj.specialDescOrder        = data.specialDescOrder
+        if (data.stateDesc               !== undefined) obj.stateDesc               = data.stateDesc
         objects[key] = obj
     }
 

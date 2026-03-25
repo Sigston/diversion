@@ -16,30 +16,130 @@ let objects:        Record<string, GameObject> = {}
 let currentRoomKey  = ''
 let startRoomKey    = ''
 
-// Snapshot of mutable object/room state taken at load time, used by reset().
-interface ObjectSnap { location: string | null; locked?: boolean }
+interface ObjectSnap { location: string | null; locked?: boolean; moved?: boolean }
 interface RoomSnap   { visited: boolean }
 const initialState: Record<string, ObjectSnap | RoomSnap> = {}
 
 // ---------------------------------------------------------------------------
-// World.load — called once by loadWorld() after parsing JSON.
+// Internal compositor helpers
+// ---------------------------------------------------------------------------
+
+function isIlluminated(room: Room): boolean {
+    return room.isLit !== false
+}
+
+function unmentionAll(room: Room): void {
+    for (const key of room.objects) {
+        const obj = objects[key]
+        if (obj) obj.mentioned = false
+    }
+}
+
+function hasActiveSpecialDesc(obj: GameObject): boolean {
+    if (obj.initSpecialDesc && !obj.moved) return true
+    if (obj.specialDesc) return true
+    return false
+}
+
+function showSpecialDesc(obj: GameObject): string | null {
+    let text: string | ((self: GameObject) => string) | undefined
+    if (obj.initSpecialDesc && !obj.moved) {
+        text = obj.initSpecialDesc
+    } else {
+        text = obj.specialDesc
+    }
+    if (!text) return null
+    const result = typeof text === 'function' ? text(obj) : text
+    obj.mentioned = true
+    return result
+}
+
+function buildMiscSentence(items: GameObject[]): string {
+    const names = items.map(obj => {
+        obj.mentioned = true
+        return obj.name
+    })
+    if (names.length === 1) return `You can also see: ${names[0]}.`
+    if (names.length === 2) return `You can also see: ${names[0]} and ${names[1]}.`
+    const last = names.pop()!
+    return `You can also see: ${names.join(', ')}, and ${last}.`
+}
+
+function listContents(room: Room, ctx: Required<Pick<WorldContext, 'excluded'>>): string | null {
+    const firstSpecial:  GameObject[] = []
+    const miscItems:     GameObject[] = []
+    const secondSpecial: GameObject[] = []
+
+    for (const key of room.objects) {
+        const obj = objects[key]
+        if (!obj || ctx.excluded[key] || obj.mentioned) continue
+        if (obj.location !== currentRoomKey) continue
+
+        if (hasActiveSpecialDesc(obj)) {
+            if (obj.specialDescBeforeContents !== false) {
+                firstSpecial.push(obj)
+            } else {
+                secondSpecial.push(obj)
+            }
+        } else if (obj.listed !== false) {
+            miscItems.push(obj)
+        }
+    }
+
+    const byOrder = (a: GameObject, b: GameObject) =>
+        (a.specialDescOrder ?? 100) - (b.specialDescOrder ?? 100)
+    firstSpecial.sort(byOrder)
+    secondSpecial.sort(byOrder)
+
+    const result: string[] = []
+
+    for (const obj of firstSpecial) {
+        const text = showSpecialDesc(obj)
+        if (text) result.push(text)
+    }
+
+    if (miscItems.length > 0) {
+        result.push(buildMiscSentence(miscItems))
+    }
+
+    for (const obj of secondSpecial) {
+        const text = showSpecialDesc(obj)
+        if (text) result.push(text)
+    }
+
+    return result.length > 0 ? result.join('\n\n') : null
+}
+
+function listExits(room: Room): string | null {
+    const available: string[] = []
+    for (const [dir, exit] of Object.entries(room.exits)) {
+        const dest = typeof exit === 'function' ? exit() : exit
+        if (dest) available.push(dir)
+    }
+    if (available.length === 0) return null
+    available.sort()
+    return 'Exits: ' + available.join(', ') + '.'
+}
+
+// ---------------------------------------------------------------------------
+// World API
 // ---------------------------------------------------------------------------
 export const World = {
 
     load(
-        roomsTable:  Record<string, Room>,
+        roomsTable:   Record<string, Room>,
         objectsTable: Record<string, GameObject>,
-        startRoom:   string
+        startRoom:    string
     ): void {
         rooms          = roomsTable
         objects        = objectsTable
         startRoomKey   = startRoom
         currentRoomKey = startRoom
 
-        // Snapshot mutable state for reset()
         for (const [key, obj] of Object.entries(objects)) {
             const snap: ObjectSnap = { location: obj.location }
             if (obj.locked !== undefined) snap.locked = obj.locked
+            if (obj.moved  !== undefined) snap.moved  = obj.moved
             initialState[key] = snap
         }
         for (const key of Object.keys(rooms)) {
@@ -79,9 +179,48 @@ export const World = {
 
     describeCurrentRoom(): string {
         const room = rooms[currentRoomKey]
-        const desc = room.description(room, World.currentContext())
+
+        // Step 1: Reset mentioned flags.
+        unmentionAll(room)
+
+        const parts: string[] = []
+
+        // Step 2: Room title.
+        parts.push(isIlluminated(room) ? room.name : (room.darkName ?? 'In the dark'))
+
+        // Step 3: Dark branch.
+        if (!isIlluminated(room)) {
+            const raw = room.darkDesc ?? "It is pitch black; you can't see a thing."
+            parts.push(typeof raw === 'function' ? raw(room) : raw)
+            room.visited = true
+            return parts.join('\n')
+        }
+
+        // Step 4: Build room context.
+        const excluded: Record<string, boolean> = {}
+        const ctx: WorldContext = {
+            firstVisit: !room.visited,
+            excluded,
+            exclude: (key: string) => { excluded[key] = true },
+        }
+
+        // Step 5: Room description body.
+        // Title and body join with a single newline; subsequent blocks use double.
+        let out = parts[0] + '\n' + room.description(room, ctx)
+
+        // Steps 6–7: Object listing and exit listing.
+        if (!room.suppressListing) {
+            const listing = listContents(room, { excluded })
+            if (listing) out += '\n\n' + listing
+
+            const exits = listExits(room)
+            if (exits) out += '\n\n' + exits
+        }
+
+        // Step 8: Mark as visited.
         room.visited = true
-        return room.name + '\n' + desc
+
+        return out
     },
 
     describeInventory(): string {
@@ -92,7 +231,6 @@ export const World = {
         return 'You are carrying: ' + carried.join(', ') + '.'
     },
 
-    // Resets all mutable world state to the values captured at load time.
     reset(): void {
         for (const [key, snap] of Object.entries(initialState)) {
             if (key in rooms) {
@@ -101,6 +239,7 @@ export const World = {
                 const s = snap as ObjectSnap
                 objects[key].location = s.location
                 if (s.locked !== undefined) objects[key].locked = s.locked
+                objects[key].moved = s.moved
             }
         }
         currentRoomKey = startRoomKey
@@ -111,6 +250,9 @@ export const World = {
     },
 
     moveObject(obj: GameObject, location: string | null): void {
+        if (location === 'inventory' && obj.location !== 'inventory') {
+            obj.moved = true
+        }
         obj.location = location
     },
 

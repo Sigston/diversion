@@ -5,7 +5,8 @@
     "adjectives": ["iron", "old", "small"],
     "description": "A small iron key. The bow is cast in the shape of a hare.",
     "location": "player_quarters",
-    "portable": true
+    "portable": true,
+    "listed": false
   },
   "copper_key": {
     "name": "copper key",
@@ -13,7 +14,8 @@
     "adjectives": ["copper", "small"],
     "description": "A small copper key. Simpler in design than you'd expect.",
     "location": "player_quarters",
-    "portable": true
+    "portable": true,
+    "listed": false
   },
   "oil_lamp": {
     "name": "oil lamp",
@@ -21,7 +23,8 @@
     "adjectives": ["oil", "brass", "old"],
     "description": "A brass oil lamp. The reservoir is about half full.",
     "location": "player_quarters",
-    "portable": true
+    "portable": true,
+    "listed": false
   },
   "writing_desk": {
     "name": "writing desk",
@@ -29,7 +32,8 @@
     "adjectives": ["writing", "large", "wooden"],
     "description": "A large wooden desk. Its surface is bare except for a faint ring left by some long-gone cup.",
     "location": "player_quarters",
-    "portable": false
+    "portable": false,
+    "listed": false
   },
   "chest": {
     "name": "small chest",
@@ -39,6 +43,7 @@
     "location": "player_quarters",
     "portable": false,
     "locked": true,
-    "lockKey": "iron_key"
+    "lockKey": "iron_key",
+    "listed": false
   }
 }

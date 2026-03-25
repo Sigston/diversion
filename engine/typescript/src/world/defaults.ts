@@ -13,10 +13,20 @@ export const Defaults: Record<string, Handler> = {
         },
         action(obj, _intent) {
             if (!obj) return "You don't see that here."
+            let desc: string
             if (typeof obj.description === 'function') {
-                return obj.description(obj, World.currentContext())
+                desc = obj.description(obj, World.currentContext())
+            } else {
+                desc = obj.description ?? 'You see nothing special about it.'
             }
-            return obj.description ?? 'You see nothing special about it.'
+            // Append stateDesc if present (Examine only — not shown during LOOK).
+            if (obj.stateDesc) {
+                const state = typeof obj.stateDesc === 'function'
+                    ? obj.stateDesc(obj)
+                    : obj.stateDesc
+                if (state) desc = desc + ' ' + state
+            }
+            return desc
         },
     },
 

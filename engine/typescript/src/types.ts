@@ -23,6 +23,9 @@ export interface GameObject {
     remapIn?:    string
     remapOn?:    string
     _key?:       string
+    scenery?:         boolean
+    notImportantMsg?: string
+    otherSide?:       string
     listed?:     boolean
     mentioned?:  boolean
     moved?:      boolean

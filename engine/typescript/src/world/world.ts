@@ -81,7 +81,7 @@ function listContents(room: Room, ctx: Required<Pick<WorldContext, 'excluded'>>)
             } else {
                 secondSpecial.push(obj)
             }
-        } else if (obj.listed !== false
+        } else if (obj.listed !== false && !obj.scenery
                    && !obj.remapIn && !obj.remapOn
                    && !(obj.contType === 'in' && obj.isOpen)) {
             miscItems.push(obj)
@@ -185,14 +185,10 @@ function listContents(room: Room, ctx: Required<Pick<WorldContext, 'excluded'>>)
 }
 
 function listExits(room: Room): string | null {
-    const available: string[] = []
-    for (const [dir, conn] of Object.entries(room.exits)) {
-        const passable = !conn.canPass || conn.canPass()
-        if (passable) available.push(dir)
-    }
-    if (available.length === 0) return null
-    available.sort()
-    return 'Exits: ' + available.join(', ') + '.'
+    const dirs = Object.keys(room.exits)
+    if (dirs.length === 0) return null
+    dirs.sort()
+    return 'Exits: ' + dirs.join(', ') + '.'
 }
 
 // ---------------------------------------------------------------------------

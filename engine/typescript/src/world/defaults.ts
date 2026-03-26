@@ -135,6 +135,10 @@ export const Defaults: Record<string, Handler> = {
         },
         action(obj, _intent) {
             obj!.locked = false
+            if (obj!.otherSide) {
+                const other = World.getObject(obj!.otherSide)
+                if (other) other.locked = false
+            }
             return 'Unlocked.'
         },
     },
@@ -153,6 +157,10 @@ export const Defaults: Record<string, Handler> = {
         },
         action(obj, _intent) {
             obj!.locked = true
+            if (obj!.otherSide) {
+                const other = World.getObject(obj!.otherSide)
+                if (other) other.locked = true
+            }
             return 'Locked.'
         },
     },

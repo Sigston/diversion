@@ -12,13 +12,11 @@ local Resolver = require("engine.lua.parser.resolver")
 local Loader   = require("engine.lua.loader")
 local State    = require("engine.lua.world.state")
 
--- Load world data from JSON once before any tests run.
-Loader.load()
-
 -- run(printFn) — printFn defaults to Lua's built-in print.
 -- Pass a custom function to redirect output (e.g. to the LÖVE2D terminal).
 local function run(printFn)
     printFn = printFn or print
+    Loader.load("game/data/test")  -- load test fixtures
     World.reset()   -- ensure clean world state regardless of what ran before
     Parser.reset()  -- ensure clean FSM state (NORMAL, no pending clarification)
     State.reset()   -- ensure clean flag state
@@ -169,13 +167,15 @@ local function run(printFn)
         "Entrance Passage\n" ..
         "A narrow stone passage leads away from your quarters. " ..
         "Bare walls, bare floor. The way back is to the south." ..
-        "\n\nExits: south.")
+        "\n\nA heavy wooden door stands to the east." ..
+        "\n\nExits: east, south.")
 
     check("second look in new room gives short desc",
         "look",
         "Entrance Passage\n" ..
         "The entrance passage. Bare stone." ..
-        "\n\nExits: south.")
+        "\n\nA heavy wooden door stands to the east." ..
+        "\n\nExits: east, south.")
 
     check("go east blocked (connector present but canPass false)",
         "go east",
@@ -198,7 +198,8 @@ local function run(printFn)
         "north",
         "Entrance Passage\n" ..
         "The entrance passage. Bare stone." ..
-        "\n\nExits: south.")
+        "\n\nA heavy wooden door stands to the east." ..
+        "\n\nExits: east, south.")
 
     check("bare 's' abbreviation moves back",
         "s",
@@ -212,7 +213,8 @@ local function run(printFn)
         "n",
         "Entrance Passage\n" ..
         "The entrance passage. Bare stone." ..
-        "\n\nExits: south.")
+        "\n\nA heavy wooden door stands to the east." ..
+        "\n\nExits: east, south.")
 
     check("bare direction with blocked connector",
         "east",
@@ -351,50 +353,83 @@ local function run(printFn)
     -- Player is in player_quarters (reset). Go north to entrance_passage first.
     -- -----------------------------------------------------------------------
 
+    -- copper_key is in inventory; iron_key is on the desk in player_quarters
+    -- (out of scope here). passage_door is in entrance_passage, locked.
     check("go north to entrance passage (setup for connector tests)",
         "north",
         "Entrance Passage\n" ..
         "The entrance passage. Bare stone." ..
-        "\n\nExits: south.")
+        "\n\nA heavy wooden door stands to the east." ..
+        "\n\nExits: east, south.")
 
     check("blocked connector returns blockedMsg",
         "east",
         "The door is locked shut.")
 
-    check("listExits hides blocked connector",
+    check("listExits shows blocked connector",
         "look",
         "Entrance Passage\n" ..
         "The entrance passage. Bare stone." ..
-        "\n\nExits: south.")
+        "\n\nA heavy wooden door stands to the east." ..
+        "\n\nExits: east, south.")
 
-    -- Unlock the passage via State flag (direct engine call, not a parser command).
-    State.set("test_passage_open", true)
+    check("examine door",
+        "examine door",
+        "A heavy wooden door, iron-banded. A keyhole sits below the handle.")
 
-    check("unblocked connector traverses with traversalMsg",
+    check("unlock door with no key",
+        "unlock door",
+        "You'll need a key for that.")
+
+    check("unlock door with copper key",
+        "unlock door with copper key",
+        "Unlocked.")
+
+    check("unlocked connector traverses with traversalMsg",
         "east",
         "You push through the heavy door.\n\n" ..
         "Blocked Passage\n" ..
         "A short corridor. The way back is west." ..
+        "\n\nA heavy wooden door stands to the west." ..
         "\n\nExits: west.")
 
     check("listExits shows unblocked connector from destination",
         "look",
         "Blocked Passage\n" ..
         "A short corridor. The way back is west." ..
+        "\n\nA heavy wooden door stands to the west." ..
         "\n\nExits: west.")
+
+    -- The other side of the door is now in scope. copper_key is in inventory.
+    check("examine door from other side",
+        "examine door",
+        "A heavy wooden door, iron-banded. The handle is on the other side.")
+
+    check("lock door from other side mirrors to entrance_passage side",
+        "lock door with copper key",
+        "Locked.")
+
+    check("door is now blocked from other side",
+        "west",
+        "The door is locked shut.")
+
+    check("unlock door from other side mirrors back",
+        "unlock door with copper key",
+        "Unlocked.")
+
+    check("can go west after unlocking from other side",
+        "west",
+        "You push back through the heavy door.\n\n" ..
+        "Entrance Passage\n" ..
+        "The entrance passage. Bare stone." ..
+        "\n\nA heavy wooden door stands to the east." ..
+        "\n\nExits: east, south.")
 
     -- -----------------------------------------------------------------------
     header("open / close")
-    -- Player is in blocked_passage after connector tests.
-    -- Navigate back to player_quarters where the chest is.
-    -- (test_passage_open is still true, so east exit shows in entrance_passage.)
+    -- Player is in entrance_passage after connector tests (returned via west).
+    -- Navigate south to player_quarters where the chest is.
     -- -----------------------------------------------------------------------
-
-    check("west back to entrance passage",
-        "west",
-        "Entrance Passage\n" ..
-        "The entrance passage. Bare stone." ..
-        "\n\nExits: east, south.")
 
     check("south back to player quarters",
         "south",
@@ -565,6 +600,36 @@ local function run(printFn)
     check("inventory shows iron key and copper key",
         "inventory",
         "You are carrying: copper key, iron key.")
+
+    -- -----------------------------------------------------------------------
+    header("scenery")
+    -- window is in player_quarters. It is scenery: examine works; everything
+    -- else returns notImportantMsg. It must not appear in room listings.
+    -- -----------------------------------------------------------------------
+
+    check("examine window returns description",
+        "examine window",
+        "A narrow window set deep into the stone. Through the thick glass you can make out the drive and the low hedge beyond.")
+
+    check("take window returns notImportantMsg",
+        "take window",
+        "The window is sealed fast in its frame.")
+
+    check("open window returns notImportantMsg",
+        "open window",
+        "The window is sealed fast in its frame.")
+
+    -- At this point: iron_key and copper_key are in inventory; oil_lamp is in the
+    -- room; desk_drawer is open containing quill_pen; chest is open containing
+    -- velvet_pouch. Window must not appear anywhere in the listing.
+    check("look does not list window",
+        "look",
+        "Your Quarters\n" ..
+        "Your quarters." ..
+        "\n\nYou can also see: oil lamp." ..
+        "\n\nThere is a writing desk here. The desk drawer is open. It contains: quill pen." ..
+        "\n\nThe small chest is open. It contains: velvet pouch." ..
+        "\n\nExits: north.")
 
     -- -----------------------------------------------------------------------
     printFn("\n" .. passed .. " passed, " .. failed .. " failed.")

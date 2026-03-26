@@ -247,7 +247,7 @@ local function listContents(room, ctx)
                 else
                     secondSpecial[#secondSpecial + 1] = obj
                 end
-            elseif obj.listed ~= false
+            elseif obj.listed ~= false and not obj.scenery
                    and not obj.remapIn and not obj.remapOn
                    and not (obj.contType == "in" and obj.isOpen) then
                 miscItems[#miscItems + 1] = obj
@@ -374,19 +374,16 @@ local function listContents(room, ctx)
     return table.concat(result, "\n\n")
 end
 
--- Builds the "Exits: north, south." sentence for traversable exits.
--- Blocked connectors (canPass returns false) are hidden from the list.
+-- Builds the "Exits: north, south." sentence. All exits are listed,
+-- including blocked ones — the player can see a door even if it's locked.
 local function listExits(room)
-    local available = {}
-    for dir, conn in pairs(room.exits) do
-        local passable = not conn.canPass or conn.canPass()
-        if passable then
-            available[#available + 1] = dir
-        end
+    local dirs = {}
+    for dir in pairs(room.exits) do
+        dirs[#dirs + 1] = dir
     end
-    if #available == 0 then return nil end
-    table.sort(available)
-    return "Exits: " .. table.concat(available, ", ") .. "."
+    if #dirs == 0 then return nil end
+    table.sort(dirs)
+    return "Exits: " .. table.concat(dirs, ", ") .. "."
 end
 
 -- The master compositor. Assembles the complete room description:

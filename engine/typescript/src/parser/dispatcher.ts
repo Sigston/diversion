@@ -29,6 +29,11 @@ export function dispatch(intent: CommandIntent): string {
     const obj  = intent.dobjRef
     const room = World.currentRoom()
 
+    // Scenery interception: non-examine verbs bounce off scenery objects.
+    if (obj && obj.scenery && verb !== 'examine') {
+        return obj.notImportantMsg ?? "That's not something you need to worry about."
+    }
+
     // 1. Object-specific handler
     if (obj && obj.handlers[verb]) {
         return runCycle(obj.handlers[verb], obj, intent)

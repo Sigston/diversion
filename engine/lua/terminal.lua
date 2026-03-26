@@ -13,6 +13,7 @@
 
 local Parser   = require("engine.lua.parser.init")
 local World    = require("engine.lua.world.world")
+local State    = require("engine.lua.world.state")
 local Loader   = require("engine.lua.loader")
 local runTests = require("test.parser_test")
 
@@ -244,9 +245,11 @@ function Terminal.submit(raw)
             end
         end
         local _, failed = runTests(testPrint)
-        -- restore clean world state so the game is still playable after tests
+        -- reload diversion data and reset so the game is playable after tests
+        Loader.load("game/data/diversion")
         World.reset()
         Parser.reset()
+        State.reset()
         pushLine("", C.system)
         processOutput(World.describeCurrentRoom())
         return
@@ -269,7 +272,7 @@ function Terminal.init()
 
     love.window.setTitle("Diversion")
 
-    local prologue = Loader.load()
+    local prologue = Loader.load("game/data/diversion")
     World.reset()
 
     -- Show prologue (if any) then the starting room description.

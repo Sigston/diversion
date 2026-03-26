@@ -207,6 +207,8 @@ print('', colours.system)
 print('--- game start ---', colours.system)
 print('', colours.system)
 
+// Reload diversion data so World.reset() uses the game snapshot, not the test snapshot.
+loadWorld()
 World.reset()
 parserReset()
 State.reset()

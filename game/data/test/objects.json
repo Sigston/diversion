@@ -76,6 +76,44 @@
     "isOpen": false,
     "contType": "in"
   },
+  "passage_door": {
+    "name": "heavy door",
+    "aliases": ["door"],
+    "adjectives": ["heavy", "iron", "wooden", "banded"],
+    "description": "A heavy wooden door, iron-banded. A keyhole sits below the handle.",
+    "location": "entrance_passage",
+    "portable": false,
+    "fixed": true,
+    "listed": false,
+    "specialDesc": "A heavy wooden door stands to the east.",
+    "locked": true,
+    "lockKey": "copper_key",
+    "otherSide": "passage_door_b"
+  },
+  "passage_door_b": {
+    "name": "heavy door",
+    "aliases": ["door"],
+    "adjectives": ["heavy", "iron", "wooden", "banded"],
+    "description": "A heavy wooden door, iron-banded. The handle is on the other side.",
+    "location": "blocked_passage",
+    "portable": false,
+    "fixed": true,
+    "listed": false,
+    "specialDesc": "A heavy wooden door stands to the west.",
+    "locked": true,
+    "lockKey": "copper_key",
+    "otherSide": "passage_door"
+  },
+  "window": {
+    "name": "window",
+    "aliases": ["window"],
+    "adjectives": ["narrow", "small", "thick"],
+    "description": "A narrow window set deep into the stone. Through the thick glass you can make out the drive and the low hedge beyond.",
+    "location": "player_quarters",
+    "portable": true,
+    "scenery": true,
+    "notImportantMsg": "The window is sealed fast in its frame."
+  },
   "velvet_pouch": {
     "name": "velvet pouch",
     "aliases": ["pouch"],

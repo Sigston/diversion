@@ -46,10 +46,20 @@ local function makeConnector(raw)
         traversalMsg = raw.traversalMsg,
         blockedMsg   = raw.blockedMsg,
     }
-    if raw.condition and raw.condition.type == "flagCheck" then
-        local flag = raw.condition.flag
-        local val  = raw.condition.value
-        conn.canPass = function() return State.get(flag) == val end
+    if raw.condition then
+        if raw.condition.type == "flagCheck" then
+            local flag = raw.condition.flag
+            local val  = raw.condition.value
+            conn.canPass = function() return State.get(flag) == val end
+        elseif raw.condition.type == "objectState" then
+            local objKey = raw.condition.object
+            local prop   = raw.condition.property
+            local val    = raw.condition.value
+            conn.canPass = function()
+                local obj = World.getObject(objKey)
+                return obj ~= nil and obj[prop] == val
+            end
+        end
     end
     return conn
 end
@@ -79,12 +89,16 @@ end
 
 -- ---------------------------------------------------------------------------
 -- Loader.load — public entry point. Call once before World.reset().
+-- dataPath: directory containing rooms.json, objects.json, events.json.
+--   Defaults to "game/data/diversion" (the real game).
+--   Pass "game/data/test" to load the parser test fixtures.
 -- Returns the intro string from events.json (empty string if none).
 -- ---------------------------------------------------------------------------
-function Loader.load()
-    local roomsSrc   = readFile("game/data/rooms.json")
-    local objectsSrc = readFile("game/data/objects.json")
-    local eventsSrc  = readFile("game/data/events.json")
+function Loader.load(dataPath)
+    dataPath = dataPath or "game/data/diversion"
+    local roomsSrc   = readFile(dataPath .. "/rooms.json")
+    local objectsSrc = readFile(dataPath .. "/objects.json")
+    local eventsSrc  = readFile(dataPath .. "/events.json")
 
     local roomsJson   = json.decode(roomsSrc)
     local objectsJson = json.decode(objectsSrc)
@@ -138,6 +152,9 @@ function Loader.load()
         if data.specialDescBeforeContents ~= nil then obj.specialDescBeforeContents = data.specialDescBeforeContents end
         if data.specialDescOrder       ~= nil then obj.specialDescOrder       = data.specialDescOrder       end
         if data.stateDesc              ~= nil then obj.stateDesc              = data.stateDesc              end
+        if data.scenery                ~= nil then obj.scenery                = data.scenery                end
+        if data.notImportantMsg        ~= nil then obj.notImportantMsg        = data.notImportantMsg        end
+        if data.otherSide              ~= nil then obj.otherSide              = data.otherSide              end
         objects[key] = obj
     end
 

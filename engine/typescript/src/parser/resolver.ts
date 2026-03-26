@@ -74,6 +74,10 @@ function matchObject(wordList: string[], candidates: GameObject[]): GameObject[]
 }
 
 function getVerifyResult(obj: GameObject, verb: string, intent: CommandIntent): VerifyResult | null {
+    // Scenery objects are illogical targets for anything except examine.
+    if (obj.scenery && verb !== 'examine') {
+        return { illogical: obj.notImportantMsg ?? "That's not something you need to worry about." }
+    }
     const handler = obj.handlers[verb] ?? Defaults[verb]
     if (handler?.verify) return handler.verify(obj, intent)
     return null

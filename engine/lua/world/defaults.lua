@@ -270,6 +270,10 @@ Defaults["unlock"] = {
 
     action = function(obj, _intent)
         obj.locked = false
+        if obj.otherSide then
+            local other = World.getObject(obj.otherSide)
+            if other then other.locked = false end
+        end
         return "Unlocked."
     end,
 }
@@ -305,6 +309,10 @@ Defaults["lock"] = {
 
     action = function(obj, _intent)
         obj.locked = true
+        if obj.otherSide then
+            local other = World.getObject(obj.otherSide)
+            if other then other.locked = true end
+        end
         return "Locked."
     end,
 }

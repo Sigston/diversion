@@ -6,10 +6,12 @@ import { process, reset as parserReset } from '../parser/index.ts'
 import { verifyRank }                    from '../parser/resolver.ts'
 import { World }                         from '../world/world.ts'
 import { State }                         from '../world/state.ts'
+import { loadTestWorld }                 from '../world/loader.ts'
 
 type PrintFn = (text: string, colour: string) => void
 
 export function runTests(print: PrintFn, colours: Record<string, string>): void {
+    loadTestWorld()
     World.reset()
     parserReset()
     State.reset()

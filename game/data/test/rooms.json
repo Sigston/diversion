@@ -4,11 +4,12 @@
     "player_quarters": {
       "name": "Your Quarters",
       "description": {
-        "firstVisit": "Your quarters are exactly as you left them — which is to say, arranged with the particular chaos of someone who knows where everything is.",
+        "firstVisit": "Your quarters are exactly as you left them \u2014 which is to say, arranged with the particular chaos of someone who knows where everything is.",
         "revisit": "Your quarters."
       },
-      "exits": { "north": "entrance_passage" },
-      "objects": ["iron_key", "copper_key", "oil_lamp", "writing_desk", "desk_surface", "desk_drawer", "quill_pen", "chest", "velvet_pouch", "window"]
+      "exits": {
+        "north": "entrance_passage"
+      }
     },
     "entrance_passage": {
       "name": "Entrance Passage",
@@ -20,12 +21,16 @@
         "south": "player_quarters",
         "east": {
           "dest": "blocked_passage",
-          "condition": { "type": "objectState", "object": "passage_door", "property": "locked", "value": false },
+          "condition": {
+            "type": "objectState",
+            "object": "passage_door",
+            "property": "locked",
+            "value": false
+          },
           "traversalMsg": "You push through the heavy door.",
           "blockedMsg": "The door is locked shut."
         }
-      },
-      "objects": ["passage_door"]
+      }
     },
     "blocked_passage": {
       "name": "Blocked Passage",
@@ -33,12 +38,16 @@
       "exits": {
         "west": {
           "dest": "entrance_passage",
-          "condition": { "type": "objectState", "object": "passage_door_b", "property": "locked", "value": false },
+          "condition": {
+            "type": "objectState",
+            "object": "passage_door_b",
+            "property": "locked",
+            "value": false
+          },
           "traversalMsg": "You push back through the heavy door.",
           "blockedMsg": "The door is locked shut."
         }
-      },
-      "objects": ["passage_door_b"]
+      }
     }
   }
 }

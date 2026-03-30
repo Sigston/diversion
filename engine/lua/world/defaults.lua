@@ -23,7 +23,8 @@
 -- Milestone 1a: examine, look, inventory.
 -- Milestone 1b: take, drop, go.
 
-local World = require("engine.lua.world.world")
+local World    = require("engine.lua.world.world")
+local Settings = require("engine.lua.world.settings")
 
 local Defaults = {}
 
@@ -233,9 +234,35 @@ local goHandler = {
         if conn.canPass and not conn.canPass() then
             return conn.blockedMsg or "You can't go that way."
         end
-        local out = conn.traversalMsg and (conn.traversalMsg .. "\n\n") or ""
+        local parts = {}
+        -- Auto-open door if present and currently closed.
+        if conn.door then
+            local door = World.getObject(conn.door)
+            if door and door.isOpen == false then
+                door.isOpen = true
+                if door.otherSide then
+                    local other = World.getObject(door.otherSide)
+                    if other then other.isOpen = true end
+                end
+                parts[#parts + 1] = "You open the " .. door.name .. "."
+            end
+        end
+        if conn.traversalMsg then parts[#parts + 1] = conn.traversalMsg end
         World.moveTo(conn.dest)
-        return out .. World.describeCurrentRoom()
+        parts[#parts + 1] = World.describeCurrentRoom()
+        -- Auto-close door behind the player (if setting is enabled).
+        if conn.door and Settings.get("doorsCloseOnExit") then
+            local door = World.getObject(conn.door)
+            if door then
+                door.isOpen = false
+                if door.otherSide then
+                    local other = World.getObject(door.otherSide)
+                    if other then other.isOpen = false end
+                end
+                parts[#parts + 1] = "The " .. door.name .. " closes behind you."
+            end
+        end
+        return table.concat(parts, "\n\n")
     end,
 }
 
@@ -250,7 +277,7 @@ Defaults["unlock"] = {
         if not obj then
             return { illogical = "You don't see that here." }
         end
-        if obj.locked == nil then
+        if not obj.isLockable then
             return { illogical = "That doesn't have a lock." }
         end
         if not obj.locked then
@@ -289,7 +316,7 @@ Defaults["lock"] = {
         if not obj then
             return { illogical = "You don't see that here." }
         end
-        if obj.locked == nil then
+        if not obj.isLockable then
             return { illogical = "That doesn't have a lock." }
         end
         if obj.locked then

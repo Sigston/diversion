@@ -11,11 +11,13 @@
 --
 -- Called from main.lua — see Section 11 of docs/architecture_v2.md.
 
-local Parser   = require("engine.lua.parser.init")
-local World    = require("engine.lua.world.world")
-local State    = require("engine.lua.world.state")
-local Loader   = require("engine.lua.loader")
-local runTests = require("test.parser_test")
+local Parser         = require("engine.lua.parser.init")
+local World          = require("engine.lua.world.world")
+local State          = require("engine.lua.world.state")
+local Settings       = require("engine.lua.world.settings")
+local Loader         = require("engine.lua.loader")
+local runTests       = require("test.parser_test")
+local IntegrityCheck = require("test.integrity_check")
 
 local Terminal = {}
 
@@ -102,12 +104,24 @@ end
 -- ---------------------------------------------------------------------------
 local function printOutput(text)
     if text == "" then return end
-    local title, body = text:match("^([^\n]+)\n(.+)$")
-    if title and body and #title <= 40 and not title:match("[%.!%?]") then
-        pushLine(title, C.roomTitle)
-        printLines(body, C.response)
-    else
-        printLines(text, C.response)
+    -- Split on double newlines so a traversalMsg prefix is treated as its own
+    -- block and the following room description still gets its title coloured.
+    local first = true
+    local start = 1
+    while true do
+        local s, e = text:find("\n\n", start, true)
+        local block = text:sub(start, s and s - 1 or nil)
+        if not first then pushLine("", C.response) end
+        first = false
+        local title, body = block:match("^([^\n]+)\n(.+)$")
+        if title and body and #title <= 40 and not title:match("[%.!%?]") then
+            pushLine(title, C.roomTitle)
+            printLines(body, C.response)
+        else
+            printLines(block, C.response)
+        end
+        if not s then break end
+        start = e + 1
     end
 end
 
@@ -245,13 +259,34 @@ function Terminal.submit(raw)
             end
         end
         local _, failed = runTests(testPrint)
-        -- reload diversion data and reset so the game is playable after tests
-        Loader.load("game/data/diversion")
+        -- reload game data and reset so the game is playable after tests
+        Loader.load()
         World.reset()
         Parser.reset()
         State.reset()
+        Settings.reset()
         pushLine("", C.system)
         processOutput(World.describeCurrentRoom())
+        return
+    end
+
+    -- check is a dev-only meta-command; re-runs the data integrity check.
+    if text == "check" then
+        pushLine("", C.system)
+        local function checkPrint(msg)
+            if msg == "" then return end
+            if msg:match("^ERROR:") then
+                pushLine(msg, C.error_col)
+            elseif msg:match("^WARNING:") then
+                pushLine(msg, C.narrator)
+            elseif msg:match("error") or msg:match("warning") then
+                local hasIssues = msg:match("^[^0]")
+                pushLine(msg, hasIssues and C.error_col or C.system)
+            else
+                pushLine(msg, C.system)
+            end
+        end
+        IntegrityCheck.run(Loader.currentPath, checkPrint)
         return
     end
 
@@ -272,8 +307,26 @@ function Terminal.init()
 
     love.window.setTitle("Diversion")
 
-    local prologue = Loader.load("game/data/diversion")
+    local prologue = Loader.load()
     World.reset()
+
+    -- Run data integrity check; show errors and warnings before the game starts.
+    local function checkPrint(msg)
+        if msg == "" then return end
+        if msg:match("^ERROR:") then
+            pushLine(msg, C.error_col)
+        elseif msg:match("^WARNING:") then
+            pushLine(msg, C.narrator)
+        elseif msg:match("error") or msg:match("warning") then
+            -- summary line
+            local hasIssues = msg:match("^[^0]")
+            pushLine(msg, hasIssues and C.error_col or C.system)
+        else
+            pushLine(msg, C.system)
+        end
+    end
+    local checkErrors = IntegrityCheck.run("game/data/diversion", checkPrint)
+    if checkErrors > 0 then pushLine("", C.system) end
 
     -- Show prologue (if any) then the starting room description.
     local roomDesc = World.describeCurrentRoom()

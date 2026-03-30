@@ -64,7 +64,7 @@ local function run(printFn)
         "Your quarters are exactly as you left them — which is to " ..
         "say, arranged with the particular chaos of someone who " ..
         "knows where everything is." ..
-        "\n\nYou can also see: iron key, copper key, oil lamp, and small chest." ..
+        "\n\nYou can also see: a copper key, an iron key, an oil lamp, and a small chest." ..
         "\n\nThere is a writing desk here. On the desk surface: quill pen." ..
         "\n\nExits: north.")
 
@@ -72,7 +72,7 @@ local function run(printFn)
         "look",
         "Your Quarters\n" ..
         "Your quarters." ..
-        "\n\nYou can also see: iron key, copper key, oil lamp, and small chest." ..
+        "\n\nYou can also see: a copper key, an iron key, an oil lamp, and a small chest." ..
         "\n\nThere is a writing desk here. On the desk surface: quill pen." ..
         "\n\nExits: north.")
 
@@ -80,7 +80,7 @@ local function run(printFn)
         "l",
         "Your Quarters\n" ..
         "Your quarters." ..
-        "\n\nYou can also see: iron key, copper key, oil lamp, and small chest." ..
+        "\n\nYou can also see: a copper key, an iron key, an oil lamp, and a small chest." ..
         "\n\nThere is a writing desk here. On the desk surface: quill pen." ..
         "\n\nExits: north.")
 
@@ -185,7 +185,7 @@ local function run(printFn)
         "go south",
         "Your Quarters\n" ..
         "Your quarters." ..
-        "\n\nYou can also see: iron key, copper key, oil lamp, and small chest." ..
+        "\n\nYou can also see: a copper key, an iron key, an oil lamp, and a small chest." ..
         "\n\nThere is a writing desk here. On the desk surface: quill pen." ..
         "\n\nExits: north.")
 
@@ -205,7 +205,7 @@ local function run(printFn)
         "s",
         "Your Quarters\n" ..
         "Your quarters." ..
-        "\n\nYou can also see: iron key, copper key, oil lamp, and small chest." ..
+        "\n\nYou can also see: a copper key, an iron key, an oil lamp, and a small chest." ..
         "\n\nThere is a writing desk here. On the desk surface: quill pen." ..
         "\n\nExits: north.")
 
@@ -224,7 +224,7 @@ local function run(printFn)
         "south",
         "Your Quarters\n" ..
         "Your quarters." ..
-        "\n\nYou can also see: iron key, copper key, oil lamp, and small chest." ..
+        "\n\nYou can also see: a copper key, an iron key, an oil lamp, and a small chest." ..
         "\n\nThere is a writing desk here. On the desk surface: quill pen." ..
         "\n\nExits: north.")
 
@@ -236,7 +236,7 @@ local function run(printFn)
 
     check("take key is ambiguous",
         "take key",
-        "Which do you mean, the iron key or the copper key?")
+        "Which do you mean, the copper key or the iron key?")
 
     check("clarification resolves and dispatches",
         "copper key",
@@ -435,7 +435,7 @@ local function run(printFn)
         "south",
         "Your Quarters\n" ..
         "Your quarters." ..
-        "\n\nYou can also see: oil lamp and small chest." ..
+        "\n\nYou can also see: an oil lamp and a small chest." ..
         "\n\nThere is a writing desk here. On the desk surface: iron key, quill pen." ..
         "\n\nExits: north.")
 
@@ -626,7 +626,7 @@ local function run(printFn)
         "look",
         "Your Quarters\n" ..
         "Your quarters." ..
-        "\n\nYou can also see: oil lamp." ..
+        "\n\nYou can also see: an oil lamp." ..
         "\n\nThere is a writing desk here. The desk drawer is open. It contains: quill pen." ..
         "\n\nThe small chest is open. It contains: velvet pouch." ..
         "\n\nExits: north.")

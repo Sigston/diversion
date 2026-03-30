@@ -52,21 +52,21 @@ export function runTests(print: PrintFn, colours: Record<string, string>): void 
         'Your quarters are exactly as you left them — which is to ' +
         'say, arranged with the particular chaos of someone who ' +
         'knows where everything is.' +
-        '\n\nYou can also see: iron key, copper key, oil lamp, and small chest.' +
+        '\n\nYou can also see: a copper key, an iron key, an oil lamp, and a small chest.' +
         '\n\nThere is a writing desk here. On the desk surface: quill pen.' +
         '\n\nExits: north.')
 
     check('second look gives short description', 'look',
         'Your Quarters\n' +
         'Your quarters.' +
-        '\n\nYou can also see: iron key, copper key, oil lamp, and small chest.' +
+        '\n\nYou can also see: a copper key, an iron key, an oil lamp, and a small chest.' +
         '\n\nThere is a writing desk here. On the desk surface: quill pen.' +
         '\n\nExits: north.')
 
     check('l is a synonym for look', 'l',
         'Your Quarters\n' +
         'Your quarters.' +
-        '\n\nYou can also see: iron key, copper key, oil lamp, and small chest.' +
+        '\n\nYou can also see: a copper key, an iron key, an oil lamp, and a small chest.' +
         '\n\nThere is a writing desk here. On the desk surface: quill pen.' +
         '\n\nExits: north.')
 
@@ -132,7 +132,7 @@ export function runTests(print: PrintFn, colours: Record<string, string>): void 
     check('go south returns to player quarters', 'go south',
         'Your Quarters\n' +
         'Your quarters.' +
-        '\n\nYou can also see: iron key, copper key, oil lamp, and small chest.' +
+        '\n\nYou can also see: a copper key, an iron key, an oil lamp, and a small chest.' +
         '\n\nThere is a writing desk here. On the desk surface: quill pen.' +
         '\n\nExits: north.')
 
@@ -148,7 +148,7 @@ export function runTests(print: PrintFn, colours: Record<string, string>): void 
     check("bare 's' abbreviation moves back", 's',
         'Your Quarters\n' +
         'Your quarters.' +
-        '\n\nYou can also see: iron key, copper key, oil lamp, and small chest.' +
+        '\n\nYou can also see: a copper key, an iron key, an oil lamp, and a small chest.' +
         '\n\nThere is a writing desk here. On the desk surface: quill pen.' +
         '\n\nExits: north.')
 
@@ -163,7 +163,7 @@ export function runTests(print: PrintFn, colours: Record<string, string>): void 
     check("bare 'south' returns home", 'south',
         'Your Quarters\n' +
         'Your quarters.' +
-        '\n\nYou can also see: iron key, copper key, oil lamp, and small chest.' +
+        '\n\nYou can also see: a copper key, an iron key, an oil lamp, and a small chest.' +
         '\n\nThere is a writing desk here. On the desk surface: quill pen.' +
         '\n\nExits: north.')
 
@@ -172,7 +172,7 @@ export function runTests(print: PrintFn, colours: Record<string, string>): void 
     // -----------------------------------------------------------------------
 
     check('take key is ambiguous', 'take key',
-        'Which do you mean, the iron key or the copper key?')
+        'Which do you mean, the copper key or the iron key?')
     check('clarification resolves and dispatches', 'copper key', 'Taken.')
     check('take key auto-resolves after one is taken', 'take key',
         '(the iron key) Taken.')
@@ -280,7 +280,7 @@ export function runTests(print: PrintFn, colours: Record<string, string>): void 
     check('south back to player quarters', 'south',
         'Your Quarters\n' +
         'Your quarters.' +
-        '\n\nYou can also see: oil lamp and small chest.' +
+        '\n\nYou can also see: an oil lamp and a small chest.' +
         '\n\nThere is a writing desk here. On the desk surface: iron key, quill pen.' +
         '\n\nExits: north.')
 

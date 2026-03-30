@@ -71,6 +71,7 @@
     "description": "A small wooden chest secured with an iron lock.",
     "location": "player_quarters",
     "portable": false,
+    "isLockable": true,
     "locked": true,
     "lockKey": "iron_key",
     "isOpen": false,
@@ -86,6 +87,7 @@
     "fixed": true,
     "listed": false,
     "specialDesc": "A heavy wooden door stands to the east.",
+    "isLockable": true,
     "locked": true,
     "lockKey": "copper_key",
     "otherSide": "passage_door_b"
@@ -100,6 +102,7 @@
     "fixed": true,
     "listed": false,
     "specialDesc": "A heavy wooden door stands to the west.",
+    "isLockable": true,
     "locked": true,
     "lockKey": "copper_key",
     "otherSide": "passage_door"

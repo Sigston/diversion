@@ -98,17 +98,24 @@ function advancePause(): void {
 // ---------------------------------------------------------------------------
 function printOutput(text: string): void {
     if (!text) return
-    const nl = text.indexOf('\n')
-    if (nl !== -1) {
-        const title = text.slice(0, nl)
-        const body  = text.slice(nl + 1)
-        if (title.length <= 40 && !/[.!?]/.test(title)) {
-            print(title, colours.roomTitle)
-            print(body,  colours.response)
-            return
+    // Split on double newlines so a traversalMsg prefix is treated as its own
+    // block and the following room description still gets its title coloured.
+    const blocks = text.split('\n\n')
+    for (let i = 0; i < blocks.length; i++) {
+        if (i > 0) print('', colours.response)
+        const block = blocks[i]
+        const nl = block.indexOf('\n')
+        if (nl !== -1) {
+            const title = block.slice(0, nl)
+            const body  = block.slice(nl + 1)
+            if (title.length <= 40 && !/[.!?]/.test(title)) {
+                print(title, colours.roomTitle)
+                print(body,  colours.response)
+                continue
+            }
         }
+        print(block, colours.response)
     }
-    print(text, colours.response)
 }
 
 // ---------------------------------------------------------------------------

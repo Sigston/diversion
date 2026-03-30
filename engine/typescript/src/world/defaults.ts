@@ -3,6 +3,7 @@
 
 import type { Handler } from '../types.ts'
 import { World } from './world.ts'
+import { Settings } from './settings.ts'
 
 export const Defaults: Record<string, Handler> = {
 
@@ -124,7 +125,7 @@ export const Defaults: Record<string, Handler> = {
     unlock: {
         verify(obj, _intent) {
             if (!obj) return { illogical: "You don't see that here." }
-            if (obj.locked === undefined) return { illogical: "That doesn't have a lock." }
+            if (!obj.isLockable) return { illogical: "That doesn't have a lock." }
             if (!obj.locked) return { illogicalAlready: "It's not locked." }
             return { logical: true }
         },
@@ -146,7 +147,7 @@ export const Defaults: Record<string, Handler> = {
     lock: {
         verify(obj, _intent) {
             if (!obj) return { illogical: "You don't see that here." }
-            if (obj.locked === undefined) return { illogical: "That doesn't have a lock." }
+            if (!obj.isLockable) return { illogical: "That doesn't have a lock." }
             if (obj.locked) return { illogicalAlready: "It's already locked." }
             return { logical: true }
         },
@@ -233,9 +234,35 @@ const goHandler: import('../types.ts').Handler = {
         const conn = World.getConnector(room, direction)
         if (!conn) return "You can't go that way."
         if (conn.canPass && !conn.canPass()) return conn.blockedMsg ?? "You can't go that way."
-        const out = conn.traversalMsg ? conn.traversalMsg + '\n\n' : ''
+        const parts: string[] = []
+        // Auto-open door if present and currently closed.
+        if (conn.door) {
+            const door = World.getObject(conn.door)
+            if (door && door.isOpen === false) {
+                door.isOpen = true
+                if (door.otherSide) {
+                    const other = World.getObject(door.otherSide)
+                    if (other) other.isOpen = true
+                }
+                parts.push('You open the ' + door.name + '.')
+            }
+        }
+        if (conn.traversalMsg) parts.push(conn.traversalMsg)
         World.moveTo(conn.dest)
-        return out + World.describeCurrentRoom()
+        parts.push(World.describeCurrentRoom())
+        // Auto-close door behind the player (if setting is enabled).
+        if (conn.door && Settings.get('doorsCloseOnExit')) {
+            const door = World.getObject(conn.door)
+            if (door) {
+                door.isOpen = false
+                if (door.otherSide) {
+                    const other = World.getObject(door.otherSide)
+                    if (other) other.isOpen = false
+                }
+                parts.push('The ' + door.name + ' closes behind you.')
+            }
+        }
+        return parts.join('\n\n')
     },
 }
 

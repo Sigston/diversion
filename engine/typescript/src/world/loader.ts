@@ -9,10 +9,35 @@
 import type { Room, GameObject, WorldContext, Connector } from '../types.ts'
 import { World } from './world.ts'
 import { State } from './state.ts'
+import { Settings } from './settings.ts'
 
-import diversionRoomsJson   from '../../../../game/data/diversion/rooms.json'
-import diversionObjectsJson from '../../../../game/data/diversion/objects.json'
-import diversionEventsJson  from '../../../../game/data/diversion/events.json'
+import configJson from '../../../../game/config.json'
+
+// ---------------------------------------------------------------------------
+// Game datasets — add a new entry here when adding a new game folder.
+// Each entry key must match the "game" value in game/config.json.
+// ---------------------------------------------------------------------------
+import diversionRoomsJson    from '../../../../game/data/diversion/rooms.json'
+import diversionObjectsJson  from '../../../../game/data/diversion/objects.json'
+import diversionEventsJson   from '../../../../game/data/diversion/events.json'
+import diversionSettingsJson from '../../../../game/data/diversion/settings.json'
+
+const gameDatasets: Record<string, {
+    rooms:    unknown
+    objects:  unknown
+    events:   unknown
+    settings: unknown
+}> = {
+    diversion: {
+        rooms:    diversionRoomsJson,
+        objects:  diversionObjectsJson,
+        events:   diversionEventsJson,
+        settings: diversionSettingsJson,
+    },
+    // To add a new game:
+    //   1. Add its imports above
+    //   2. Add an entry here matching the folder name in game/data/
+}
 
 import testRoomsJson   from '../../../../game/data/test/rooms.json'
 import testObjectsJson from '../../../../game/data/test/objects.json'
@@ -27,13 +52,13 @@ interface ExitJson {
     condition?:    ConditionJson
     traversalMsg?: string
     blockedMsg?:   string
+    door?:         string
 }
 
 interface RoomJson {
     name:             string
     description:      string | { firstVisit: string; revisit: string }
     exits:            Record<string, string | ExitJson>
-    objects:          string[]
     isLit?:           boolean
     darkName?:        string
     darkDesc?:        string
@@ -48,6 +73,7 @@ interface ObjectJson {
     location:    string | null
     portable:    boolean
     fixed?:      boolean
+    isLockable?: boolean
     locked?:     boolean
     lockKey?:    string
     isOpen?:     boolean
@@ -59,7 +85,7 @@ interface ObjectJson {
     initSpecialDesc?:          string
     specialDescBeforeContents?: boolean
     specialDescOrder?:         number
-    stateDesc?:                string
+    stateDesc?:                string | { open: string; closed: string }
     scenery?:                  boolean
     notImportantMsg?:          string
     otherSide?:                string
@@ -73,6 +99,7 @@ function makeConnector(raw: string | ExitJson): Connector {
     const conn: Connector = { dest: raw.dest }
     if (raw.traversalMsg) conn.traversalMsg = raw.traversalMsg
     if (raw.blockedMsg)   conn.blockedMsg   = raw.blockedMsg
+    if (raw.door)         conn.door         = raw.door
     if (raw.condition?.type === 'flagCheck') {
         const { flag, value } = raw.condition
         conn.canPass = () => State.get(flag as string) === value
@@ -103,10 +130,12 @@ function makeDescription(
 // Returns the intro string from events.json (empty string if none).
 // ---------------------------------------------------------------------------
 function buildWorld(
-    roomsJson:   { startRoom: string; rooms: Record<string, RoomJson> },
-    objectsJson: Record<string, ObjectJson>,
-    eventsJson:  { intro?: string }
+    roomsJson:    { startRoom: string; rooms: Record<string, RoomJson> },
+    objectsJson:  Record<string, ObjectJson>,
+    eventsJson:   { intro?: string },
+    settingsJson: Record<string, unknown> = {}
 ): string {
+    Settings.load(settingsJson)
     const rooms: Record<string, Room> = {}
     for (const [key, data] of Object.entries(roomsJson.rooms)) {
         const exits: Record<string, Connector> = {}
@@ -117,7 +146,7 @@ function buildWorld(
             name:        data.name,
             description: makeDescription(data.description),
             exits,
-            objects:     data.objects ?? [],
+            objects:     [],
             handlers:    {},
             visited:     false,
         }
@@ -140,6 +169,7 @@ function buildWorld(
             handlers:    {},
         }
         if (data.fixed                    !== undefined) obj.fixed                    = data.fixed
+        if (data.isLockable               !== undefined) obj.isLockable               = data.isLockable
         if (data.locked                   !== undefined) obj.locked                   = data.locked
         if (data.lockKey                  !== undefined) obj.lockKey                  = data.lockKey
         if (data.isOpen                   !== undefined) obj.isOpen                   = data.isOpen
@@ -151,7 +181,14 @@ function buildWorld(
         if (data.initSpecialDesc          !== undefined) obj.initSpecialDesc          = data.initSpecialDesc
         if (data.specialDescBeforeContents !== undefined) obj.specialDescBeforeContents = data.specialDescBeforeContents
         if (data.specialDescOrder         !== undefined) obj.specialDescOrder         = data.specialDescOrder
-        if (data.stateDesc                !== undefined) obj.stateDesc                = data.stateDesc
+        if (data.stateDesc !== undefined) {
+            if (typeof data.stateDesc === 'object') {
+                const { open: openMsg, closed: closedMsg } = data.stateDesc
+                obj.stateDesc = (self: GameObject) => self.isOpen ? openMsg : closedMsg
+            } else {
+                obj.stateDesc = data.stateDesc
+            }
+        }
         if (data.scenery                  !== undefined) obj.scenery                  = data.scenery
         if (data.notImportantMsg          !== undefined) obj.notImportantMsg          = data.notImportantMsg
         if (data.otherSide                !== undefined) obj.otherSide                = data.otherSide
@@ -163,14 +200,18 @@ function buildWorld(
 }
 
 // ---------------------------------------------------------------------------
-// loadWorld — loads the real game data (game/data/diversion/).
+// loadWorld — loads the game specified in game/config.json.
 // Call once at startup; returns the intro string.
 // ---------------------------------------------------------------------------
 export function loadWorld(): string {
+    const gameName = (configJson as { game: string }).game
+    const dataset = gameDatasets[gameName]
+    if (!dataset) throw new Error(`game/config.json specifies unknown game: "${gameName}". Add it to gameDatasets in loader.ts.`)
     return buildWorld(
-        diversionRoomsJson  as { startRoom: string; rooms: Record<string, RoomJson> },
-        diversionObjectsJson as Record<string, ObjectJson>,
-        diversionEventsJson  as { intro?: string }
+        dataset.rooms    as { startRoom: string; rooms: Record<string, RoomJson> },
+        dataset.objects  as Record<string, ObjectJson>,
+        dataset.events   as { intro?: string },
+        dataset.settings as Record<string, unknown>
     )
 }
 

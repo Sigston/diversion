@@ -16,6 +16,7 @@ export interface GameObject {
     location:    string | null
     fixed?:      boolean
     portable:    boolean
+    isLockable?: boolean
     locked?:     boolean
     lockKey?:    string
     isOpen?:     boolean
@@ -41,6 +42,7 @@ export interface Connector {
     dest:          string
     traversalMsg?: string
     blockedMsg?:   string
+    door?:         string
     canPass?:      () => boolean
 }
 

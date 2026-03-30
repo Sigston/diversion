@@ -28,10 +28,9 @@ function isIlluminated(room: Room): boolean {
     return room.isLit !== false
 }
 
-function unmentionAll(room: Room): void {
-    for (const key of room.objects) {
-        const obj = objects[key]
-        if (obj) obj.mentioned = false
+function unmentionAll(): void {
+    for (const obj of Object.values(objects)) {
+        obj.mentioned = false
     }
 }
 
@@ -54,10 +53,14 @@ function showSpecialDesc(obj: GameObject): string | null {
     return result
 }
 
+function article(name: string): string {
+    return /^[aeiou]/i.test(name) ? 'an' : 'a'
+}
+
 function buildMiscSentence(items: GameObject[]): string {
     const names = items.map(obj => {
         obj.mentioned = true
-        return obj.name
+        return `${article(obj.name)} ${obj.name}`
     })
     if (names.length === 1) return `You can also see: ${names[0]}.`
     if (names.length === 2) return `You can also see: ${names[0]} and ${names[1]}.`
@@ -87,6 +90,8 @@ function listContents(room: Room, ctx: Required<Pick<WorldContext, 'excluded'>>)
             miscItems.push(obj)
         }
     }
+
+    miscItems.sort((a, b) => a.name.localeCompare(b.name))
 
     const byOrder = (a: GameObject, b: GameObject) =>
         (a.specialDescOrder ?? 100) - (b.specialDescOrder ?? 100)
@@ -207,7 +212,7 @@ export const World = {
         currentRoomKey = startRoom
 
         for (const [key, obj] of Object.entries(objects)) {
-            obj._key = key   // store own key for container operations
+            obj._key = key
             const snap: ObjectSnap = { location: obj.location }
             if (obj.locked  !== undefined) snap.locked  = obj.locked
             if (obj.isOpen  !== undefined) snap.isOpen  = obj.isOpen
@@ -217,6 +222,14 @@ export const World = {
         for (const key of Object.keys(rooms)) {
             initialState[key] = { visited: false }
         }
+
+        // Build room.objects (direct children only) from object location properties.
+        for (const room of Object.values(rooms)) room.objects = []
+        for (const [objKey, obj] of Object.entries(objects)) {
+            const loc = obj.location
+            if (loc && rooms[loc]) rooms[loc].objects.push(objKey)
+        }
+        for (const room of Object.values(rooms)) room.objects.sort()
     },
 
     currentRoom(): Room {
@@ -235,25 +248,38 @@ export const World = {
         const scope: GameObject[] = []
         const room = rooms[currentRoomKey]
 
-        function isReachable(obj: GameObject): boolean {
-            const loc = obj.location
-            if (loc === currentRoomKey) return true
-            if (!loc) return false
-            const container = objects[loc]
-            if (!container) return false
-            if (!isReachable(container)) return false
-            if (container.contType === 'on') return true
-            if (container.contType === 'in' && container.isOpen) return true
-            return false
+        // Recursively add contents of an object container, sorted by key.
+        function addContainerContents(contKey: string): void {
+            const children = Object.values(objects)
+                .filter(o => o.location === contKey)
+                .sort((a, b) => (a._key ?? '').localeCompare(b._key ?? ''))
+            for (const obj of children) {
+                scope.push(obj)
+                if (obj.contType === 'on'
+                        || (obj.contType === 'in' && obj.isOpen)) {
+                    addContainerContents(obj._key!)
+                }
+            }
         }
 
+        // Top-level room objects (room.objects is kept sorted by key).
         for (const key of room.objects) {
             const obj = objects[key]
-            if (obj && isReachable(obj)) scope.push(obj)
+            if (obj) {
+                scope.push(obj)
+                if (obj.contType === 'on'
+                        || (obj.contType === 'in' && obj.isOpen)) {
+                    addContainerContents(obj._key!)
+                }
+            }
         }
-        for (const obj of Object.values(objects)) {
-            if (obj.location === 'inventory') scope.push(obj)
-        }
+
+        // Inventory (sorted by key for determinism).
+        const inv = Object.values(objects)
+            .filter(o => o.location === 'inventory')
+            .sort((a, b) => (a._key ?? '').localeCompare(b._key ?? ''))
+        for (const obj of inv) scope.push(obj)
+
         return scope
     },
 
@@ -273,7 +299,7 @@ export const World = {
         const room = rooms[currentRoomKey]
 
         // Step 1: Reset mentioned flags.
-        unmentionAll(room)
+        unmentionAll()
 
         const parts: string[] = []
 
@@ -337,6 +363,14 @@ export const World = {
             }
         }
         currentRoomKey = startRoomKey
+
+        // Rebuild room.objects from restored object locations.
+        for (const room of Object.values(rooms)) room.objects = []
+        for (const [objKey, obj] of Object.entries(objects)) {
+            const loc = obj.location
+            if (loc && rooms[loc]) rooms[loc].objects.push(objKey)
+        }
+        for (const room of Object.values(rooms)) room.objects.sort()
     },
 
     moveTo(roomKey: string): void {
@@ -347,7 +381,21 @@ export const World = {
         if (location === 'inventory' && obj.location !== 'inventory') {
             obj.moved = true
         }
+
+        // Remove from old room's direct-child list if it was directly in a room.
+        const oldLoc = obj.location
+        if (oldLoc && rooms[oldLoc]) {
+            const oldObjs = rooms[oldLoc].objects
+            const idx = oldObjs.indexOf(obj._key!)
+            if (idx !== -1) oldObjs.splice(idx, 1)
+        }
+
         obj.location = location
+
+        // Add to new room's direct-child list if moving directly into a room.
+        if (location && rooms[location]) {
+            rooms[location].objects.push(obj._key!)
+        }
     },
 
     getObject(key: string): GameObject | undefined {

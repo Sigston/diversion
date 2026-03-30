@@ -4,20 +4,48 @@
     "master_bedroom_north": {
       "name": "Master Bedroom, North",
       "description": {
-        "firstVisit": "The north of the master bedroom. The rest of the room is to the south.",
-        "revisit": "The north of the master bedroom. The rest of the room is to the south."
+        "firstVisit": "The north of the master bedroom.",
+        "revisit": "The north of the master bedroom."
       },
-      "exits": { "south": "master_bedroom_south", "east": "office" },
-      "objects": []
+      "exits": {
+        "south": "master_bedroom_south",
+        "east": {
+          "dest": "office",
+          "door": "bedroom_office_door_a"
+        }
+      }
     },
     "master_bedroom_south": {
       "name": "Master Bedroom, South",
       "description": {
-        "firstVisit": "The south of the master bedroom. The rest of the room is to the north.",
-        "revisit": "The south of the master bedroom. The rest of the room is to the north."
+        "firstVisit": "The south of the master bedroom.",
+        "revisit": "The south of the master bedroom."
       },
-      "exits": { "north": "master_bedroom_north", "east": "north_landing", "south": "master_ensuite" },
-      "objects": []
+      "exits": {
+        "north": "master_bedroom_north",
+        "east": {
+          "dest": "north_landing",
+          "door": "bedroom_landing_door_a",
+          "condition": {
+            "type": "objectState",
+            "object": "bedroom_landing_door_a",
+            "property": "locked",
+            "value": false
+          },
+          "blockedMsg": "The door is locked."
+        },
+        "south": {
+          "dest": "master_ensuite",
+          "door": "bedroom_ensuite_door_a",
+          "condition": {
+            "type": "objectState",
+            "object": "bedroom_ensuite_door_a",
+            "property": "locked",
+            "value": false
+          },
+          "blockedMsg": "The door is locked."
+        }
+      }
     },
     "master_ensuite": {
       "name": "Master Ensuite",
@@ -25,8 +53,19 @@
         "firstVisit": "The master ensuite.",
         "revisit": "The master ensuite."
       },
-      "exits": { "north": "master_bedroom_south" },
-      "objects": []
+      "exits": {
+        "north": {
+          "dest": "master_bedroom_south",
+          "door": "bedroom_ensuite_door_b",
+          "condition": {
+            "type": "objectState",
+            "object": "bedroom_ensuite_door_b",
+            "property": "locked",
+            "value": false
+          },
+          "blockedMsg": "The door is locked."
+        }
+      }
     },
     "office": {
       "name": "Office",
@@ -34,8 +73,36 @@
         "firstVisit": "The office.",
         "revisit": "The office."
       },
-      "exits": { "west": "master_bedroom_north", "east": "games_room", "south": "north_landing" },
-      "objects": []
+      "exits": {
+        "west": {
+          "dest": "master_bedroom_north",
+          "door": "bedroom_office_door_b"
+        },
+        "east": {
+          "dest": "games_room",
+          "door": "office_games_door_a",
+          "condition": {
+            "type": "objectState",
+            "object": "office_games_door_a",
+            "property": "locked",
+            "value": false
+          },
+          "blockedMsg": "The door is locked.",
+          "traversalMsg": "You go through the eastern door."
+        },
+        "south": {
+          "dest": "north_landing",
+          "door": "office_landing_door_a",
+          "condition": {
+            "type": "objectState",
+            "object": "office_landing_door_a",
+            "property": "locked",
+            "value": false
+          },
+          "blockedMsg": "The door is locked.",
+          "traversalMsg": "You go through the southern door."
+        }
+      }
     },
     "games_room": {
       "name": "Games Room",
@@ -43,8 +110,10 @@
         "firstVisit": "The games room.",
         "revisit": "The games room."
       },
-      "exits": { "west": "office", "south": "northeast_landing" },
-      "objects": []
+      "exits": {
+        "west": "office",
+        "south": "northeast_landing"
+      }
     },
     "north_landing": {
       "name": "North Landing",
@@ -52,8 +121,12 @@
         "firstVisit": "The north landing.",
         "revisit": "The north landing."
       },
-      "exits": { "north": "office", "west": "master_bedroom_south", "east": "northeast_landing", "south": "west_landing" },
-      "objects": []
+      "exits": {
+        "north": "office",
+        "west": "master_bedroom_south",
+        "east": "northeast_landing",
+        "south": "west_landing"
+      }
     },
     "west_landing": {
       "name": "West Landing",
@@ -61,8 +134,12 @@
         "firstVisit": "The west landing.",
         "revisit": "The west landing."
       },
-      "exits": { "north": "north_landing", "west": "cupboard", "east": "library", "south": "southwest_landing" },
-      "objects": []
+      "exits": {
+        "north": "north_landing",
+        "west": "cupboard",
+        "east": "library",
+        "south": "southwest_landing"
+      }
     },
     "cupboard": {
       "name": "Cupboard",
@@ -70,8 +147,9 @@
         "firstVisit": "The cupboard.",
         "revisit": "The cupboard."
       },
-      "exits": { "east": "west_landing" },
-      "objects": []
+      "exits": {
+        "east": "west_landing"
+      }
     },
     "library": {
       "name": "Library",
@@ -79,8 +157,11 @@
         "firstVisit": "The library.",
         "revisit": "The library."
       },
-      "exits": { "west": "west_landing", "south": "south_landing", "down": "library_lower" },
-      "objects": []
+      "exits": {
+        "west": "west_landing",
+        "south": "south_landing",
+        "down": "library_lower"
+      }
     },
     "library_lower": {
       "name": "Library Lower",
@@ -88,8 +169,12 @@
         "firstVisit": "The lower library.",
         "revisit": "The lower library."
       },
-      "exits": { "up": "library", "east": "library_entrance", "down": "library_storage", "west": "long_room_centre" },
-      "objects": []
+      "exits": {
+        "up": "library",
+        "east": "library_entrance",
+        "down": "library_storage",
+        "west": "long_room_centre"
+      }
     },
     "southwest_landing": {
       "name": "South-West Landing",
@@ -97,8 +182,12 @@
         "firstVisit": "The south-west landing.",
         "revisit": "The south-west landing."
       },
-      "exits": { "north": "west_landing", "west": "guest_bedroom_w", "south": "guest_bedroom_s", "east": "south_landing" },
-      "objects": []
+      "exits": {
+        "north": "west_landing",
+        "west": "guest_bedroom_w",
+        "south": "guest_bedroom_s",
+        "east": "south_landing"
+      }
     },
     "guest_bedroom_w": {
       "name": "Guest Bedroom West",
@@ -106,8 +195,9 @@
         "firstVisit": "The west guest bedroom.",
         "revisit": "The west guest bedroom."
       },
-      "exits": { "east": "southwest_landing" },
-      "objects": []
+      "exits": {
+        "east": "southwest_landing"
+      }
     },
     "guest_bedroom_s": {
       "name": "Guest Bedroom South",
@@ -115,8 +205,9 @@
         "firstVisit": "The south guest bedroom.",
         "revisit": "The south guest bedroom."
       },
-      "exits": { "north": "southwest_landing" },
-      "objects": []
+      "exits": {
+        "north": "southwest_landing"
+      }
     },
     "south_landing": {
       "name": "South Landing",
@@ -124,8 +215,12 @@
         "firstVisit": "The south landing.",
         "revisit": "The south landing."
       },
-      "exits": { "west": "southwest_landing", "north": "library", "south": "bathroom", "east": "southeast_landing" },
-      "objects": []
+      "exits": {
+        "west": "southwest_landing",
+        "north": "library",
+        "south": "bathroom",
+        "east": "southeast_landing"
+      }
     },
     "bathroom": {
       "name": "Bathroom",
@@ -133,8 +228,9 @@
         "firstVisit": "The bathroom.",
         "revisit": "The bathroom."
       },
-      "exits": { "north": "south_landing" },
-      "objects": []
+      "exits": {
+        "north": "south_landing"
+      }
     },
     "southeast_landing": {
       "name": "South-East Landing",
@@ -142,8 +238,13 @@
         "firstVisit": "The south-east landing.",
         "revisit": "The south-east landing."
       },
-      "exits": { "north": "east_landing", "west": "south_landing", "south": "storage", "east": "reading_room_upper", "up": "loft_space" },
-      "objects": []
+      "exits": {
+        "north": "east_landing",
+        "west": "south_landing",
+        "south": "storage",
+        "east": "reading_room_upper",
+        "up": "loft_space"
+      }
     },
     "storage": {
       "name": "Storage",
@@ -151,8 +252,9 @@
         "firstVisit": "The storage room.",
         "revisit": "The storage room."
       },
-      "exits": { "north": "southeast_landing" },
-      "objects": []
+      "exits": {
+        "north": "southeast_landing"
+      }
     },
     "reading_room_upper": {
       "name": "Reading Room Upper",
@@ -160,8 +262,10 @@
         "firstVisit": "The upper reading room.",
         "revisit": "The upper reading room."
       },
-      "exits": { "west": "southeast_landing", "down": "reading_room_lower" },
-      "objects": []
+      "exits": {
+        "west": "southeast_landing",
+        "down": "reading_room_lower"
+      }
     },
     "reading_room_lower": {
       "name": "Reading Room Lower",
@@ -169,8 +273,11 @@
         "firstVisit": "The lower reading room.",
         "revisit": "The lower reading room."
       },
-      "exits": { "up": "reading_room_upper", "north": "foyer", "down": "reading_room_storage" },
-      "objects": []
+      "exits": {
+        "up": "reading_room_upper",
+        "north": "foyer",
+        "down": "reading_room_storage"
+      }
     },
     "library_entrance": {
       "name": "Library Entrance",
@@ -178,8 +285,11 @@
         "firstVisit": "The library entrance.",
         "revisit": "The library entrance."
       },
-      "exits": { "south": "foyer", "west": "library_lower", "north": "east_gallery" },
-      "objects": []
+      "exits": {
+        "south": "foyer",
+        "west": "library_lower",
+        "north": "east_gallery"
+      }
     },
     "east_gallery": {
       "name": "Gallery, East",
@@ -187,8 +297,12 @@
         "firstVisit": "The east gallery.",
         "revisit": "The east gallery."
       },
-      "exits": { "north": "billiards_room", "south": "library_entrance", "east": "great_dining_room", "west": "gallery_west" },
-      "objects": []
+      "exits": {
+        "north": "billiards_room",
+        "south": "library_entrance",
+        "east": "great_dining_room",
+        "west": "gallery_west"
+      }
     },
     "museum_room": {
       "name": "Museum Room",
@@ -196,8 +310,10 @@
         "firstVisit": "The museum room.",
         "revisit": "The museum room."
       },
-      "exits": { "west": "foyer", "down": "museum_storage" },
-      "objects": []
+      "exits": {
+        "west": "foyer",
+        "down": "museum_storage"
+      }
     },
     "museum_storage": {
       "name": "Museum Storage",
@@ -205,8 +321,11 @@
         "firstVisit": "The museum storage.",
         "revisit": "The museum storage."
       },
-      "exits": { "up": "museum_room", "south": "reading_room_storage", "north": "wine_cellar" },
-      "objects": []
+      "exits": {
+        "up": "museum_room",
+        "south": "reading_room_storage",
+        "north": "wine_cellar"
+      }
     },
     "breakfast_room": {
       "name": "Breakfast Room",
@@ -214,8 +333,11 @@
         "firstVisit": "The breakfast room.",
         "revisit": "The breakfast room."
       },
-      "exits": { "east": "foyer", "west": "long_room_south", "south": "arcade_east" },
-      "objects": []
+      "exits": {
+        "east": "foyer",
+        "west": "long_room_south",
+        "south": "arcade_east"
+      }
     },
     "long_room_centre": {
       "name": "Long Room, Centre",
@@ -223,8 +345,12 @@
         "firstVisit": "The centre of the long room.",
         "revisit": "The centre of the long room."
       },
-      "exits": { "south": "long_room_south", "north": "long_room_north", "west": "ballroom_north", "east": "library_lower" },
-      "objects": []
+      "exits": {
+        "south": "long_room_south",
+        "north": "long_room_north",
+        "west": "ballroom_north",
+        "east": "library_lower"
+      }
     },
     "library_storage": {
       "name": "Library Storage",
@@ -232,8 +358,11 @@
         "firstVisit": "The library storage.",
         "revisit": "The library storage."
       },
-      "exits": { "up": "library_lower", "east": "reading_room_storage", "west": "vault" },
-      "objects": []
+      "exits": {
+        "up": "library_lower",
+        "east": "reading_room_storage",
+        "west": "vault"
+      }
     },
     "vault": {
       "name": "Vault",
@@ -241,8 +370,9 @@
         "firstVisit": "The vault.",
         "revisit": "The vault."
       },
-      "exits": { "east": "library_storage" },
-      "objects": []
+      "exits": {
+        "east": "library_storage"
+      }
     },
     "reception_room": {
       "name": "Reception Room",
@@ -250,8 +380,12 @@
         "firstVisit": "The reception room.",
         "revisit": "The reception room."
       },
-      "exits": { "west": "green_room", "south": "long_room_north", "east": "sitting_room", "north": "front_of_house" },
-      "objects": []
+      "exits": {
+        "west": "green_room",
+        "south": "long_room_north",
+        "east": "sitting_room",
+        "north": "front_of_house"
+      }
     },
     "sitting_room": {
       "name": "Sitting Room",
@@ -259,8 +393,12 @@
         "firstVisit": "The sitting room.",
         "revisit": "The sitting room."
       },
-      "exits": { "north": "bay_window", "west": "reception_room", "south": "gallery_west", "east": "billiards_room" },
-      "objects": []
+      "exits": {
+        "north": "bay_window",
+        "west": "reception_room",
+        "south": "gallery_west",
+        "east": "billiards_room"
+      }
     },
     "front_of_house": {
       "name": "Front of House",
@@ -268,8 +406,9 @@
         "firstVisit": "The front of house.",
         "revisit": "The front of house."
       },
-      "exits": { "south": "reception_room" },
-      "objects": []
+      "exits": {
+        "south": "reception_room"
+      }
     },
     "gallery_west": {
       "name": "Gallery, West",
@@ -277,8 +416,11 @@
         "firstVisit": "The west gallery.",
         "revisit": "The west gallery."
       },
-      "exits": { "north": "sitting_room", "west": "long_room_north", "east": "east_gallery" },
-      "objects": []
+      "exits": {
+        "north": "sitting_room",
+        "west": "long_room_north",
+        "east": "east_gallery"
+      }
     },
     "bay_window": {
       "name": "Bay Window",
@@ -286,8 +428,9 @@
         "firstVisit": "The bay window.",
         "revisit": "The bay window."
       },
-      "exits": { "south": "sitting_room" },
-      "objects": []
+      "exits": {
+        "south": "sitting_room"
+      }
     },
     "billiards_room": {
       "name": "Billiards Room",
@@ -295,8 +438,10 @@
         "firstVisit": "The billiards room.",
         "revisit": "The billiards room."
       },
-      "exits": { "west": "sitting_room", "south": "east_gallery" },
-      "objects": []
+      "exits": {
+        "west": "sitting_room",
+        "south": "east_gallery"
+      }
     },
     "green_room": {
       "name": "Green Room",
@@ -304,8 +449,10 @@
         "firstVisit": "The green room.",
         "revisit": "The green room."
       },
-      "exits": { "south": "small_dining_room", "east": "reception_room" },
-      "objects": []
+      "exits": {
+        "south": "small_dining_room",
+        "east": "reception_room"
+      }
     },
     "small_dining_room": {
       "name": "Small Dining Room",
@@ -313,8 +460,12 @@
         "firstVisit": "The small dining room.",
         "revisit": "The small dining room."
       },
-      "exits": { "south": "ballroom_north", "north": "green_room", "east": "long_room_north", "west": "kitchens_north" },
-      "objects": []
+      "exits": {
+        "south": "ballroom_north",
+        "north": "green_room",
+        "east": "long_room_north",
+        "west": "kitchens_north"
+      }
     },
     "long_room_north": {
       "name": "Long Room, North",
@@ -322,8 +473,12 @@
         "firstVisit": "The north end of the long room.",
         "revisit": "The north end of the long room."
       },
-      "exits": { "north": "reception_room", "south": "long_room_centre", "west": "small_dining_room", "east": "gallery_west" },
-      "objects": []
+      "exits": {
+        "north": "reception_room",
+        "south": "long_room_centre",
+        "west": "small_dining_room",
+        "east": "gallery_west"
+      }
     },
     "ballroom_south": {
       "name": "Ballroom, South",
@@ -331,8 +486,12 @@
         "firstVisit": "The south end of the ballroom.",
         "revisit": "The south end of the ballroom."
       },
-      "exits": { "east": "long_room_south", "west": "kitchens_centre", "north": "ballroom_north", "south": "arcade_west" },
-      "objects": []
+      "exits": {
+        "east": "long_room_south",
+        "west": "kitchens_centre",
+        "north": "ballroom_north",
+        "south": "arcade_west"
+      }
     },
     "ballroom_north": {
       "name": "Ballroom, North",
@@ -340,8 +499,11 @@
         "firstVisit": "The north end of the ballroom.",
         "revisit": "The north end of the ballroom."
       },
-      "exits": { "south": "ballroom_south", "north": "small_dining_room", "east": "long_room_centre" },
-      "objects": []
+      "exits": {
+        "south": "ballroom_south",
+        "north": "small_dining_room",
+        "east": "long_room_centre"
+      }
     },
     "long_room_south": {
       "name": "Long Room, South",
@@ -349,8 +511,12 @@
         "firstVisit": "The south end of the long room.",
         "revisit": "The south end of the long room."
       },
-      "exits": { "north": "long_room_centre", "east": "breakfast_room", "south": "arcade_central", "west": "ballroom_south" },
-      "objects": []
+      "exits": {
+        "north": "long_room_centre",
+        "east": "breakfast_room",
+        "south": "arcade_central",
+        "west": "ballroom_south"
+      }
     },
     "arcade_east": {
       "name": "Arcade, East",
@@ -358,8 +524,11 @@
         "firstVisit": "The east end of the arcade.",
         "revisit": "The east end of the arcade."
       },
-      "exits": { "north": "breakfast_room", "west": "arcade_central", "south": "ha_ha" },
-      "objects": []
+      "exits": {
+        "north": "breakfast_room",
+        "west": "arcade_central",
+        "south": "ha_ha"
+      }
     },
     "arcade_central": {
       "name": "Arcade, Central",
@@ -367,8 +536,12 @@
         "firstVisit": "The central arcade.",
         "revisit": "The central arcade."
       },
-      "exits": { "north": "long_room_south", "east": "arcade_east", "west": "arcade_west", "south": "ha_ha" },
-      "objects": []
+      "exits": {
+        "north": "long_room_south",
+        "east": "arcade_east",
+        "west": "arcade_west",
+        "south": "ha_ha"
+      }
     },
     "arcade_west": {
       "name": "Arcade, West",
@@ -376,8 +549,12 @@
         "firstVisit": "The west end of the arcade.",
         "revisit": "The west end of the arcade."
       },
-      "exits": { "north": "ballroom_south", "east": "arcade_central", "south": "ha_ha", "west": "kitchens_south" },
-      "objects": []
+      "exits": {
+        "north": "ballroom_south",
+        "east": "arcade_central",
+        "south": "ha_ha",
+        "west": "kitchens_south"
+      }
     },
     "ha_ha": {
       "name": "Ha-Ha",
@@ -385,8 +562,10 @@
         "firstVisit": "The ha-ha.",
         "revisit": "The ha-ha."
       },
-      "exits": { "north": "arcade_central", "west": "larder_lean_to" },
-      "objects": []
+      "exits": {
+        "north": "arcade_central",
+        "west": "larder_lean_to"
+      }
     },
     "great_dining_room": {
       "name": "Great Dining Room",
@@ -394,8 +573,11 @@
         "firstVisit": "The great dining room.",
         "revisit": "The great dining room."
       },
-      "exits": { "west": "east_gallery", "east": "veranda", "down": "wine_cellar" },
-      "objects": []
+      "exits": {
+        "west": "east_gallery",
+        "east": "veranda",
+        "down": "wine_cellar"
+      }
     },
     "veranda": {
       "name": "Veranda",
@@ -403,8 +585,9 @@
         "firstVisit": "The veranda.",
         "revisit": "The veranda."
       },
-      "exits": { "west": "great_dining_room" },
-      "objects": []
+      "exits": {
+        "west": "great_dining_room"
+      }
     },
     "wine_cellar": {
       "name": "Wine Cellar",
@@ -412,8 +595,11 @@
         "firstVisit": "The wine cellar.",
         "revisit": "The wine cellar."
       },
-      "exits": { "up": "great_dining_room", "south": "museum_storage", "west": "dining_room_access" },
-      "objects": []
+      "exits": {
+        "up": "great_dining_room",
+        "south": "museum_storage",
+        "west": "dining_room_access"
+      }
     },
     "dining_room_access": {
       "name": "Dining Room Access",
@@ -421,8 +607,10 @@
         "firstVisit": "The dining room access.",
         "revisit": "The dining room access."
       },
-      "exits": { "east": "wine_cellar", "west": "sitting_room_access" },
-      "objects": []
+      "exits": {
+        "east": "wine_cellar",
+        "west": "sitting_room_access"
+      }
     },
     "sitting_room_access": {
       "name": "Sitting Room Access",
@@ -430,8 +618,10 @@
         "firstVisit": "The sitting room access.",
         "revisit": "The sitting room access."
       },
-      "exits": { "east": "dining_room_access", "west": "lower_kitchens_north" },
-      "objects": []
+      "exits": {
+        "east": "dining_room_access",
+        "west": "lower_kitchens_north"
+      }
     },
     "lower_kitchens_north": {
       "name": "Lower Kitchens, North",
@@ -439,8 +629,11 @@
         "firstVisit": "The north end of the lower kitchens.",
         "revisit": "The north end of the lower kitchens."
       },
-      "exits": { "east": "sitting_room_access", "south": "lower_kitchens_south", "west": "lower_kitchens_access" },
-      "objects": []
+      "exits": {
+        "east": "sitting_room_access",
+        "south": "lower_kitchens_south",
+        "west": "lower_kitchens_access"
+      }
     },
     "lower_kitchens_south": {
       "name": "Lower Kitchens, South",
@@ -448,8 +641,9 @@
         "firstVisit": "The south end of the lower kitchens.",
         "revisit": "The south end of the lower kitchens."
       },
-      "exits": { "north": "lower_kitchens_north" },
-      "objects": []
+      "exits": {
+        "north": "lower_kitchens_north"
+      }
     },
     "lower_kitchens_access": {
       "name": "Lower Kitchens Access",
@@ -457,8 +651,11 @@
         "firstVisit": "The lower kitchens access.",
         "revisit": "The lower kitchens access."
       },
-      "exits": { "east": "lower_kitchens_north", "south": "garden_basement", "up": "kitchens_north" },
-      "objects": []
+      "exits": {
+        "east": "lower_kitchens_north",
+        "south": "garden_basement",
+        "up": "kitchens_north"
+      }
     },
     "garden_basement": {
       "name": "Garden Basement",
@@ -466,8 +663,9 @@
         "firstVisit": "The garden basement.",
         "revisit": "The garden basement."
       },
-      "exits": { "north": "lower_kitchens_access" },
-      "objects": []
+      "exits": {
+        "north": "lower_kitchens_access"
+      }
     },
     "kitchens_north": {
       "name": "Kitchens, North",
@@ -475,8 +673,11 @@
         "firstVisit": "The north end of the kitchens.",
         "revisit": "The north end of the kitchens."
       },
-      "exits": { "down": "lower_kitchens_access", "south": "kitchens_centre", "east": "small_dining_room" },
-      "objects": []
+      "exits": {
+        "down": "lower_kitchens_access",
+        "south": "kitchens_centre",
+        "east": "small_dining_room"
+      }
     },
     "larder_lean_to": {
       "name": "Larder Lean-To",
@@ -484,8 +685,10 @@
         "firstVisit": "The larder lean-to.",
         "revisit": "The larder lean-to."
       },
-      "exits": { "east": "ha_ha", "west": "larder" },
-      "objects": []
+      "exits": {
+        "east": "ha_ha",
+        "west": "larder"
+      }
     },
     "larder": {
       "name": "Larder",
@@ -493,8 +696,10 @@
         "firstVisit": "The larder.",
         "revisit": "The larder."
       },
-      "exits": { "east": "larder_lean_to", "north": "kitchens_south" },
-      "objects": []
+      "exits": {
+        "east": "larder_lean_to",
+        "north": "kitchens_south"
+      }
     },
     "kitchens_south": {
       "name": "Kitchens, South",
@@ -502,8 +707,11 @@
         "firstVisit": "The south end of the kitchens.",
         "revisit": "The south end of the kitchens."
       },
-      "exits": { "south": "larder", "north": "kitchens_centre", "east": "arcade_west" },
-      "objects": []
+      "exits": {
+        "south": "larder",
+        "north": "kitchens_centre",
+        "east": "arcade_west"
+      }
     },
     "kitchens_centre": {
       "name": "Kitchens, Centre",
@@ -511,8 +719,11 @@
         "firstVisit": "The centre of the kitchens.",
         "revisit": "The centre of the kitchens."
       },
-      "exits": { "south": "kitchens_south", "north": "kitchens_north", "east": "ballroom_south" },
-      "objects": []
+      "exits": {
+        "south": "kitchens_south",
+        "north": "kitchens_north",
+        "east": "ballroom_south"
+      }
     },
     "reading_room_storage": {
       "name": "Reading Room Storage",
@@ -520,8 +731,11 @@
         "firstVisit": "The reading room storage.",
         "revisit": "The reading room storage."
       },
-      "exits": { "up": "reading_room_lower", "north": "museum_storage", "west": "library_storage" },
-      "objects": []
+      "exits": {
+        "up": "reading_room_lower",
+        "north": "museum_storage",
+        "west": "library_storage"
+      }
     },
     "loft_space": {
       "name": "Loft Space",
@@ -529,8 +743,10 @@
         "firstVisit": "The loft space.",
         "revisit": "The loft space."
       },
-      "exits": { "down": "southeast_landing", "west": "west_loft" },
-      "objects": []
+      "exits": {
+        "down": "southeast_landing",
+        "west": "west_loft"
+      }
     },
     "west_loft": {
       "name": "West Loft",
@@ -538,8 +754,10 @@
         "firstVisit": "The west loft.",
         "revisit": "The west loft."
       },
-      "exits": { "east": "loft_space", "north": "north_loft" },
-      "objects": []
+      "exits": {
+        "east": "loft_space",
+        "north": "north_loft"
+      }
     },
     "north_loft": {
       "name": "North Loft",
@@ -547,8 +765,9 @@
         "firstVisit": "The north loft.",
         "revisit": "The north loft."
       },
-      "exits": { "south": "west_loft" },
-      "objects": []
+      "exits": {
+        "south": "west_loft"
+      }
     },
     "guest_room_e": {
       "name": "Guest Room East",
@@ -556,8 +775,10 @@
         "firstVisit": "The east guest room.",
         "revisit": "The east guest room."
       },
-      "exits": { "west": "east_landing", "south": "guest_room_ensuite" },
-      "objects": []
+      "exits": {
+        "west": "east_landing",
+        "south": "guest_room_ensuite"
+      }
     },
     "guest_room_ensuite": {
       "name": "Guest Room Ensuite",
@@ -565,8 +786,9 @@
         "firstVisit": "The guest room ensuite.",
         "revisit": "The guest room ensuite."
       },
-      "exits": { "north": "guest_room_e" },
-      "objects": []
+      "exits": {
+        "north": "guest_room_e"
+      }
     },
     "east_landing": {
       "name": "East Landing",
@@ -574,8 +796,12 @@
         "firstVisit": "The east landing.",
         "revisit": "The east landing."
       },
-      "exits": { "north": "northeast_landing", "east": "guest_room_e", "south": "southeast_landing" },
-      "objects": []
+      "exits": {
+        "down": "foyer",
+        "north": "northeast_landing",
+        "east": "guest_room_e",
+        "south": "southeast_landing"
+      }
     },
     "northeast_landing": {
       "name": "North-East Landing",
@@ -583,8 +809,12 @@
         "firstVisit": "The north-east landing.",
         "revisit": "The north-east landing."
       },
-      "exits": { "north": "games_room", "south": "east_landing", "east": "balcony", "west": "north_landing" },
-      "objects": []
+      "exits": {
+        "north": "games_room",
+        "south": "east_landing",
+        "east": "balcony",
+        "west": "north_landing"
+      }
     },
     "balcony": {
       "name": "Balcony",
@@ -592,8 +822,9 @@
         "firstVisit": "The balcony.",
         "revisit": "The balcony."
       },
-      "exits": { "west": "northeast_landing" },
-      "objects": []
+      "exits": {
+        "west": "northeast_landing"
+      }
     },
     "foyer": {
       "name": "Foyer",
@@ -601,8 +832,13 @@
         "firstVisit": "The foyer.",
         "revisit": "The foyer."
       },
-      "exits": { "up": "east_landing", "south": "reading_room_lower", "north": "library_entrance", "east": "museum_room", "west": "breakfast_room" },
-      "objects": []
+      "exits": {
+        "up": "east_landing",
+        "south": "reading_room_lower",
+        "north": "library_entrance",
+        "east": "museum_room",
+        "west": "breakfast_room"
+      }
     }
   }
 }

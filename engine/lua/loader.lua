@@ -6,9 +6,10 @@
 -- Works both inside LÖVE2D (love.filesystem) and in headless Lua (io.open).
 -- Called once at startup before any parser or world operations.
 
-local json  = require("lib.json")
-local World = require("engine.lua.world.world")
-local State = require("engine.lua.world.state")
+local json     = require("lib.json")
+local World    = require("engine.lua.world.world")
+local State    = require("engine.lua.world.state")
+local Settings = require("engine.lua.world.settings")
 
 local Loader = {}
 
@@ -45,6 +46,7 @@ local function makeConnector(raw)
         dest         = raw.dest,
         traversalMsg = raw.traversalMsg,
         blockedMsg   = raw.blockedMsg,
+        door         = raw.door,
     }
     if raw.condition then
         if raw.condition.type == "flagCheck" then
@@ -90,12 +92,26 @@ end
 -- ---------------------------------------------------------------------------
 -- Loader.load — public entry point. Call once before World.reset().
 -- dataPath: directory containing rooms.json, objects.json, events.json.
---   Defaults to "game/data/diversion" (the real game).
---   Pass "game/data/test" to load the parser test fixtures.
+--   If omitted, reads game/config.json to determine which game folder to load.
+--   Pass "game/data/test" explicitly to load the parser test fixtures.
 -- Returns the intro string from events.json (empty string if none).
 -- ---------------------------------------------------------------------------
+
+-- The resolved data path from the most recent Loader.load() call.
+-- Useful for other callers (e.g. the integrity checker) that need the same path.
+Loader.currentPath = nil
+
 function Loader.load(dataPath)
-    dataPath = dataPath or "game/data/diversion"
+    if not dataPath then
+        local ok, src = pcall(readFile, "game/config.json")
+        if ok then
+            local cfg = json.decode(src)
+            dataPath = "game/data/" .. (cfg.game or "diversion")
+        else
+            dataPath = "game/data/diversion"
+        end
+    end
+    Loader.currentPath = dataPath
     local roomsSrc   = readFile(dataPath .. "/rooms.json")
     local objectsSrc = readFile(dataPath .. "/objects.json")
     local eventsSrc  = readFile(dataPath .. "/events.json")
@@ -103,6 +119,10 @@ function Loader.load(dataPath)
     local roomsJson   = json.decode(roomsSrc)
     local objectsJson = json.decode(objectsSrc)
     local eventsJson  = json.decode(eventsSrc)
+
+    -- settings.json is optional; missing file leaves all settings at defaults.
+    local ok, settingsSrc = pcall(readFile, dataPath .. "/settings.json")
+    Settings.load(ok and json.decode(settingsSrc) or {})
 
     -- Build rooms table
     local rooms = {}
@@ -115,7 +135,7 @@ function Loader.load(dataPath)
             name        = data.name,
             description = makeDescription(data.description),
             exits       = exits,
-            objects     = data.objects  or {},
+            objects     = {},
             handlers    = {},
             visited     = false,
         }
@@ -140,6 +160,7 @@ function Loader.load(dataPath)
         }
         -- Optional object properties
         if data.fixed                  ~= nil then obj.fixed                  = data.fixed                  end
+        if data.isLockable             ~= nil then obj.isLockable             = data.isLockable             end
         if data.locked                 ~= nil then obj.locked                 = data.locked                 end
         if data.lockKey                ~= nil then obj.lockKey                = data.lockKey                end
         if data.isOpen                 ~= nil then obj.isOpen                 = data.isOpen                 end
@@ -151,7 +172,17 @@ function Loader.load(dataPath)
         if data.initSpecialDesc        ~= nil then obj.initSpecialDesc        = data.initSpecialDesc        end
         if data.specialDescBeforeContents ~= nil then obj.specialDescBeforeContents = data.specialDescBeforeContents end
         if data.specialDescOrder       ~= nil then obj.specialDescOrder       = data.specialDescOrder       end
-        if data.stateDesc              ~= nil then obj.stateDesc              = data.stateDesc              end
+        if data.stateDesc ~= nil then
+            if type(data.stateDesc) == "table" then
+                local openMsg   = data.stateDesc.open
+                local closedMsg = data.stateDesc.closed
+                obj.stateDesc = function(self)
+                    return self.isOpen and openMsg or closedMsg
+                end
+            else
+                obj.stateDesc = data.stateDesc
+            end
+        end
         if data.scenery                ~= nil then obj.scenery                = data.scenery                end
         if data.notImportantMsg        ~= nil then obj.notImportantMsg        = data.notImportantMsg        end
         if data.otherSide              ~= nil then obj.otherSide              = data.otherSide              end

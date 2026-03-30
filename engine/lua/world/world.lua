@@ -32,9 +32,10 @@ function World.load(roomsTable, objectsTable, startRoom)
     startRoomKey   = startRoom
     currentRoomKey = startRoom
 
+    -- Set _key on every object and take the mutable-state snapshot.
     initialState = {}
     for key, obj in pairs(objects) do
-        obj._key = key    -- store own key for container operations
+        obj._key = key
         initialState[key] = {
             location = obj.location,
             locked   = obj.locked,
@@ -45,6 +46,21 @@ function World.load(roomsTable, objectsTable, startRoom)
     for key in pairs(rooms) do
         initialState[key] = { visited = false }
     end
+
+    -- Build room.objects (direct children only) from object location properties.
+    for _, room in pairs(rooms) do
+        room.objects = {}
+    end
+    for objKey, obj in pairs(objects) do
+        local loc = obj.location
+        if loc and rooms[loc] then
+            rooms[loc].objects[#rooms[loc].objects + 1] = objKey
+        end
+    end
+    for _, room in pairs(rooms) do
+        table.sort(room.objects)
+    end
+
 end
 
 -- ---------------------------------------------------------------------------
@@ -65,37 +81,54 @@ function World.currentContext()
     return {}
 end
 
--- Returns true if obj is physically reachable from the current room.
--- On-containers are always open. In-containers require isOpen = true.
-local function isReachable(obj)
-    local loc = obj.location
-    if loc == currentRoomKey then return true end
-    if loc == nil then return false end
-    local container = objects[loc]
-    if not container then return false end
-    if not isReachable(container) then return false end
-    if container.contType == "on" then return true end
-    if container.contType == "in" and container.isOpen then return true end
-    return false
-end
-
 -- Returns all objects currently in scope.
--- Includes room objects (reachable through open containers/surfaces) + inventory.
+-- Uses sorted room.objects for the top level; recurses into open containers
+-- (sorting their children by key for determinism); appends inventory last.
 function World.inScope()
     local scope = {}
     local room  = rooms[currentRoomKey]
 
-    for _, key in ipairs(room.objects) do
-        local obj = objects[key]
-        if obj and isReachable(obj) then
+    -- Recursively add contents of an object container (not used for the room
+    -- itself, since room.objects already provides the sorted top-level list).
+    local function addContainerContents(contKey)
+        local children = {}
+        for _, obj in pairs(objects) do
+            if obj.location == contKey then
+                children[#children + 1] = obj
+            end
+        end
+        table.sort(children, function(a, b) return (a._key or "") < (b._key or "") end)
+        for _, obj in ipairs(children) do
             scope[#scope + 1] = obj
+            if obj.contType == "on"
+                    or (obj.contType == "in" and obj.isOpen) then
+                addContainerContents(obj._key)
+            end
         end
     end
 
+    -- Top-level room objects (room.objects is kept sorted by key).
+    for _, key in ipairs(room.objects) do
+        local obj = objects[key]
+        if obj then
+            scope[#scope + 1] = obj
+            if obj.contType == "on"
+                    or (obj.contType == "in" and obj.isOpen) then
+                addContainerContents(obj._key)
+            end
+        end
+    end
+
+    -- Inventory (sorted by key for determinism).
+    local inv = {}
     for _, obj in pairs(objects) do
         if obj.location == "inventory" then
-            scope[#scope + 1] = obj
+            inv[#inv + 1] = obj
         end
+    end
+    table.sort(inv, function(a, b) return (a._key or "") < (b._key or "") end)
+    for _, obj in ipairs(inv) do
+        scope[#scope + 1] = obj
     end
 
     return scope
@@ -153,6 +186,20 @@ function World.reset()
         end
     end
     currentRoomKey = startRoomKey
+
+    -- Rebuild room.objects from restored object locations.
+    for _, room in pairs(rooms) do
+        room.objects = {}
+    end
+    for objKey, obj in pairs(objects) do
+        local loc = obj.location
+        if loc and rooms[loc] then
+            rooms[loc].objects[#rooms[loc].objects + 1] = objKey
+        end
+    end
+    for _, room in pairs(rooms) do
+        table.sort(room.objects)
+    end
 end
 
 function World.moveTo(roomKey)
@@ -164,7 +211,26 @@ function World.moveObject(obj, location)
     if location == "inventory" and obj.location ~= "inventory" then
         obj.moved = true
     end
+
+    -- Remove from old room's direct-child list if it was directly in a room.
+    local oldLoc = obj.location
+    if oldLoc and rooms[oldLoc] then
+        local oldObjs = rooms[oldLoc].objects
+        for i, key in ipairs(oldObjs) do
+            if key == obj._key then
+                table.remove(oldObjs, i)
+                break
+            end
+        end
+    end
+
     obj.location = location
+
+    -- Add to new room's direct-child list if moving directly into a room.
+    if location and rooms[location] then
+        local newObjs = rooms[location].objects
+        newObjs[#newObjs + 1] = obj._key
+    end
 end
 
 function World.getObject(key)
@@ -186,11 +252,10 @@ local function isIlluminated(room)
     return room.isLit ~= false
 end
 
--- Clears the mentioned flag on every object in the room before each LOOK.
-local function unmentionAll(room)
-    for _, key in ipairs(room.objects) do
-        local obj = objects[key]
-        if obj then obj.mentioned = false end
+-- Clears the mentioned flag on every object before each LOOK.
+local function unmentionAll()
+    for _, obj in pairs(objects) do
+        obj.mentioned = false
     end
 end
 
@@ -215,11 +280,16 @@ local function showSpecialDesc(obj)
     return text
 end
 
+-- Returns "an" before vowel-initial words, "a" otherwise.
+local function article(name)
+    return name:match("^[aeiouAEIOU]") and "an" or "a"
+end
+
 -- Builds the "You can also see: X, Y, and Z." sentence for unlisted misc items.
 local function buildMiscSentence(items)
     local names = {}
     for _, obj in ipairs(items) do
-        names[#names + 1] = obj.name
+        names[#names + 1] = article(obj.name) .. " " .. obj.name
         obj.mentioned = true
     end
     if #names == 1 then
@@ -254,6 +324,8 @@ local function listContents(room, ctx)
             end
         end
     end
+
+    table.sort(miscItems, function(a, b) return a.name < b.name end)
 
     local function byOrder(a, b)
         return (a.specialDescOrder or 100) < (b.specialDescOrder or 100)
@@ -391,8 +463,8 @@ end
 function World.describeCurrentRoom()
     local room = rooms[currentRoomKey]
 
-    -- Step 1: Reset mentioned flags on all room objects.
-    unmentionAll(room)
+    -- Step 1: Reset mentioned flags on all objects.
+    unmentionAll()
 
     local parts = {}
 

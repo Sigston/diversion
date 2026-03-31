@@ -3,16 +3,26 @@
     "name": "door",
     "aliases": ["door"],
     "adjectives": ["south", "heavy"],
-    "description": "A heavy door with no handle or lock.",
+    "description": "A heavy door with no handle or lock. There is an engraving above it.",
     "location": "start_1",
+    "isOpen": false,
+    "openable": false,
     "otherSide": "start_door_b",
     "fixed": true,
-    "listed": false
+    "listed": false,
+    "specialDesc": [
+      {
+        "when": [{ "type": "objectState", "object": "start_door", "property": "isOpen", "value": true }],
+        "text": "The heavy door to the south stands open."
+      }
+    ]
   },
   "start_door_b": {
     "name": "door",
     "description": "A heavy door.",
     "location": "infant_2",
+    "isOpen": false,
+    "openable": false,
     "otherSide": "start_door",
     "fixed": true,
     "listed": false,
@@ -21,10 +31,23 @@
   "start_terminal": {
     "name": "terminal",
     "aliases": ["terminal", "keyboard", "keys"],
-    "description": "I wouldn't be able to see the keyboard, even if it wasn't dark - my head is rigidly pointing straight ahead.",
+    "description": [
+      {
+        "when": [{"type":"flagCheck", "flag": "lights_on", "value": false}],
+        "text": "I wouldn't be able to see the keyboard, even if it wasn't dark - my head is rigidly pointing straight ahead."
+      },
+      {
+        "when": [{"type":"flagCheck", "flag": "player_restrained", "value": true}],
+        "text": "I can't see much of the keyboard through the rotating mirror."
+      },
+      {
+        "text": "A keyboard attached to the side of the wheel. It seems I'm meant to type on it."
+      }
+    ],
     "location": "start_1",
     "portable": false,
     "visibleInDark": true,
+    "listed": false,
     "typeDefault": "Nothing happens.",
     "typeResponses": [
       {
@@ -49,20 +72,19 @@
           { "type": "setFlag", "flag": "player_restrained", "value": false },
           { "type": "setFlag", "flag": "wheel_turning", "value": false }
         ],
-        "text": "At first I think the solution wasn't right, but then the wheel sets me to a more sensible orientation towards the ground, and the metal fittings snap free. I slump to the floor.[PAUSE]Now that I'm no longer spinning, I can see the room more clearly. It's rectangular in shape, with one long wall being taken up with the mirror, and the other containing twelve boxes. The wheel stands in the centre. On one of the shorter walls is a table with two books on it. There is a door on the other side of the room."
+        "text": "At first I think the solution wasn't right, but then the wheel sets me to a more sensible orientation towards the ground, and the metal fittings snap free. I slump to the floor.[PAUSE]Now that I'm no longer spinning, I can see the room more clearly. It's rectangular in shape, with one long wall being taken up with the mirror, and the other containing twelve boxes. The wheel stands in the centre. There is a door on one of the short sides of the room."
       },
       {
-        "phrases": ["exit tartarus", "leave tartarus"],
-        "when": [{ "type": "objectState", "object": "start_door", "property": "isOpen", "value": false }],
+        "phrases": ["exit tartarus", "leave tartarus", "open tartarus"],
+        "when": [
+          { "type": "flagCheck", "flag": "player_restrained", "value": false },
+          { "type": "objectState", "object": "start_door", "property": "isOpen", "value": false }
+        ],
         "effects": [
           { "type": "setObjectProp", "object": "start_door", "property": "isOpen", "value": true },
           { "type": "setObjectProp", "object": "start_door_b", "property": "isOpen", "value": true }
         ],
-        "text": "There is a heavy clunk. The door swings open."
-      },
-      {
-        "phrases": ["exit tartarus", "leave tartarus"],
-        "text": "The door is already open."
+        "text": "I hear the sound of a latch releasing. The door opens."
       }
     ]
   },
@@ -70,7 +92,15 @@
     "name": "wheel",
     "aliases": ["wheel", "spokes", "spoke", "fittings"],
     "adjectives": ["great", "spinning", "fiery", "Ixion's"],
-    "description": "It's hard to see much of the wheel from your position, but through the mirror you can see that it has five spokes, each spitting fire, and a terrified individual pinned to the centre.",
+    "description": [
+      {
+        "when": [{"type":"flagCheck", "flag": "player_restrained", "value": true}],
+        "text": "It's hard to see much of the wheel from here, but through the mirror I can see it has five spokes, each spitting fire, and a terrified individual pinned to the centre."
+      },
+      {
+        "text": "The wheel that I was previously bound to. It has five spokes, slightly singed at the ends, and a platform for someone to stand. A keyboard is attached to the side."
+      }
+    ],
     "location": "start_1",
     "fixed": true,
     "listed": false
@@ -79,7 +109,15 @@
     "name": "mirror",
     "aliases": ["mirror", "glass", "reflection", "wall"],
     "adjectives": ["great", "huge", "wall"],
-    "description": "A mirror covering the entire wall opposite you. In it you can see yourself, lashed to the wheel. There is writing scrawled across it.",
+    "description": [
+      {
+        "when": [{"type": "flagCheck", "flag": "player_restrained", "value": true}],
+        "text": "A mirror covering the entire wall opposite you. In it you can see yourself, lashed to the wheel. There is writing scrawled across it."
+      },
+      {
+        "text": "A mirror covering the entire wall. There is writing scrawled across it."
+      }
+    ],
     "location": "start_1",
     "fixed": true,
     "listed": false
@@ -103,35 +141,11 @@
     "fixed": true,
     "scenery": true
   },
-  "start_table": {
-    "name": "table",
-    "aliases": ["table"],
-    "description": "A plain table.",
-    "location": "start_1",
-    "fixed": true,
-    "contType": "on"
-  },
-  "greek_myth_book": {
-    "name": "book of greek myths",
-    "aliases": ["greek myths", "myth book", "greek book", "myths"],
-    "adjectives": ["greek"],
-    "description": "A hefty volume: Greek Myths, A Complete Reference. A ribbon bookmark hangs from the spine.",
-    "location": "start_table",
-    "portable": true
-  },
-  "biblical_ref_book": {
-    "name": "book of biblical references",
-    "aliases": ["biblical references", "bible book", "biblical book", "references"],
-    "adjectives": ["biblical"],
-    "description": "A hefty volume: The Complete Biblical Reference. Well-thumbed.",
-    "location": "start_table",
-    "portable": true
-  },
   "door_writing": {
-    "name": "inscription",
-    "aliases": ["inscription", "sign"],
+    "name": "door engraving",
+    "aliases": ["engraving"],
     "adjectives": ["door", "above"],
-    "description": "Writing above the door. [TO BE WRITTEN — clues EXIT TARTARUS]",
+    "description": "Writing engraved into the wall above the door:[I]Your prison: two rats, being backward, are lost with us.",
     "location": "start_1",
     "fixed": true,
     "scenery": true

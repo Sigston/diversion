@@ -368,7 +368,8 @@ function Loader.load(dataPath)
         if data.remapIn                ~= nil then obj.remapIn                = data.remapIn                end
         if data.remapOn                ~= nil then obj.remapOn                = data.remapOn                end
         if data.listed                 ~= nil then obj.listed                 = data.listed                 end
-        if data.specialDesc            ~= nil then obj.specialDesc            = assignFirstIds(data.specialDesc)     end
+        if data.openable               ~= nil then obj.openable               = data.openable                       end
+        if data.specialDesc            ~= nil then obj.specialDesc            = makeObjectDescription(data.specialDesc) end
         if data.initSpecialDesc        ~= nil then obj.initSpecialDesc        = assignFirstIds(data.initSpecialDesc) end
         if data.specialDescBeforeContents ~= nil then obj.specialDescBeforeContents = data.specialDescBeforeContents end
         if data.specialDescOrder       ~= nil then obj.specialDescOrder       = data.specialDescOrder       end

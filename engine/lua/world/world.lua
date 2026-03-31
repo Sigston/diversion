@@ -289,7 +289,14 @@ end
 -- Returns true if obj has an active specialDesc or initSpecialDesc paragraph.
 local function hasActiveSpecialDesc(obj)
     if obj.initSpecialDesc and not obj.moved then return true end
-    if obj.specialDesc then return true end
+    if obj.specialDesc then
+        -- If specialDesc is a function (e.g. conditional array form), evaluate it
+        -- to check if it currently produces any text.
+        if type(obj.specialDesc) == "function" then
+            return obj.specialDesc(obj) ~= ""
+        end
+        return true
+    end
     return false
 end
 
@@ -303,6 +310,7 @@ local function showSpecialDesc(obj)
     end
     if not text then return nil end
     if type(text) == "function" then text = text(obj) end
+    if not text or text == "" then return nil end
     obj.mentioned = true
     return text
 end
@@ -525,9 +533,12 @@ function World.describeCurrentRoom()
     local out = parts[1] .. "\n" .. desc
 
     -- Steps 6–7: Object listing and exit listing (unless suppressed).
-    local suppress = type(room.suppressListing) == "function"
-                     and room.suppressListing()
-                      or room.suppressListing
+    local suppress
+    if type(room.suppressListing) == "function" then
+        suppress = room.suppressListing()
+    else
+        suppress = room.suppressListing
+    end
     if not suppress then
         local listing = listContents(room, ctx)
         if listing then out = out .. "\n\n" .. listing end

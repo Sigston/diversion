@@ -213,7 +213,7 @@ export const Defaults: Record<string, Handler> = {
             if (!obj) return { illogical: "You don't see that here." }
             // Remap to in-container sub-object if present (e.g. "open desk" → desk_drawer).
             const target = (obj.remapIn ? World.getObject(obj.remapIn) : null) ?? obj
-            if (target.isOpen === undefined) return { illogical: "That doesn't open." }
+            if (target.isOpen === undefined || target.openable === false) return { illogical: "That doesn't open." }
             if (target.isOpen) return { illogicalAlready: "It's already open." }
             if (target.locked) return { illogicalNow: "It's locked." }
             return { logical: true }
@@ -230,7 +230,7 @@ export const Defaults: Record<string, Handler> = {
             if (!obj) return { illogical: "You don't see that here." }
             // Remap to in-container sub-object if present (e.g. "close desk" → desk_drawer).
             const target = (obj.remapIn ? World.getObject(obj.remapIn) : null) ?? obj
-            if (target.isOpen === undefined) return { illogical: "That doesn't close." }
+            if (target.isOpen === undefined || target.openable === false) return { illogical: "That doesn't close." }
             if (!target.isOpen) return { illogicalAlready: "It's already closed." }
             return { logical: true }
         },

@@ -113,13 +113,14 @@ interface ObjectJson {
     locked?:     boolean
     lockKey?:    string
     isOpen?:     boolean
+    openable?:   boolean
     contType?:   'in' | 'on'
     remapIn?:    string
     remapOn?:    string
     listed?:          boolean
     visibleInDark?:   boolean
     readDesc?:        string
-    specialDesc?:              string
+    specialDesc?:              string | ObjectDescBlockJson[]
     initSpecialDesc?:          string
     specialDescBeforeContents?: boolean
     specialDescOrder?:         number
@@ -366,11 +367,12 @@ function buildWorld(
         if (data.locked                   !== undefined) obj.locked                   = data.locked
         if (data.lockKey                  !== undefined) obj.lockKey                  = data.lockKey
         if (data.isOpen                   !== undefined) obj.isOpen                   = data.isOpen
+        if (data.openable                 !== undefined) obj.openable                 = data.openable
         if (data.contType                 !== undefined) obj.contType                 = data.contType
         if (data.remapIn                  !== undefined) obj.remapIn                  = data.remapIn
         if (data.remapOn                  !== undefined) obj.remapOn                  = data.remapOn
         if (data.listed                   !== undefined) obj.listed                   = data.listed
-        if (data.specialDesc              !== undefined) obj.specialDesc              = assignFirstIds(data.specialDesc)
+        if (data.specialDesc              !== undefined) obj.specialDesc              = makeObjectDescription(data.specialDesc) as string
         if (data.initSpecialDesc          !== undefined) obj.initSpecialDesc          = assignFirstIds(data.initSpecialDesc)
         if (data.specialDescBeforeContents !== undefined) obj.specialDescBeforeContents = data.specialDescBeforeContents
         if (data.specialDescOrder         !== undefined) obj.specialDescOrder         = data.specialDescOrder

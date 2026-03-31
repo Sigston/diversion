@@ -38,7 +38,12 @@ function unmentionAll(): void {
 
 function hasActiveSpecialDesc(obj: GameObject): boolean {
     if (obj.initSpecialDesc && !obj.moved) return true
-    if (obj.specialDesc) return true
+    if (obj.specialDesc) {
+        // If specialDesc is a function (e.g. conditional array form), evaluate it
+        // to check if it currently produces any text.
+        if (typeof obj.specialDesc === 'function') return obj.specialDesc(obj) !== ''
+        return true
+    }
     return false
 }
 
@@ -51,6 +56,7 @@ function showSpecialDesc(obj: GameObject): string | null {
     }
     if (!text) return null
     const result = typeof text === 'function' ? text(obj) : text
+    if (!result) return null
     obj.mentioned = true
     return result
 }

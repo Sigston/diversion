@@ -392,7 +392,7 @@ Defaults["open"] = {
         end
         -- Remap to the in-container sub-object if present (e.g. "open desk" → desk_drawer).
         local target = (obj.remapIn and World.getObject(obj.remapIn)) or obj
-        if target.isOpen == nil then
+        if target.isOpen == nil or target.openable == false then
             return { illogical = "That doesn't open." }
         end
         if target.isOpen then
@@ -424,7 +424,7 @@ Defaults["close"] = {
         end
         -- Remap to the in-container sub-object if present (e.g. "close desk" → desk_drawer).
         local target = (obj.remapIn and World.getObject(obj.remapIn)) or obj
-        if target.isOpen == nil then
+        if target.isOpen == nil or target.openable == false then
             return { illogical = "That doesn't close." }
         end
         if not target.isOpen then

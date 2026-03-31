@@ -20,6 +20,7 @@ export interface GameObject {
     locked?:     boolean
     lockKey?:    string
     isOpen?:     boolean
+    openable?:   boolean
     contType?:   'in' | 'on'
     remapIn?:    string
     remapOn?:    string

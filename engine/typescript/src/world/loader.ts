@@ -81,8 +81,8 @@ interface AfterTurnRuleJson {
 
 interface DescriptionBlockJson {
     when?:       ConditionJson[]
-    firstVisit:  string
-    revisit:     string
+    firstVisit?: string
+    revisit?:    string
 }
 
 interface ObjectDescBlockJson {
@@ -177,8 +177,8 @@ function makeDescription(
     if (Array.isArray(desc)) {
         const blocks = desc.map(block => ({
             conditions: (block.when ?? []).map(makeCondition),
-            firstVisit: assignFirstIds(block.firstVisit),
-            revisit:    assignFirstIds(block.revisit),
+            firstVisit: assignFirstIds(block.firstVisit ?? ''),
+            revisit:    assignFirstIds(block.revisit    ?? ''),
         }))
         return (self) => {
             for (const block of blocks) {

@@ -2,11 +2,18 @@
   "startRoom": "start_1",
   "rooms": {
     "start_1": {
-      "name": "The Start (1)",
-      "description": {
-        "firstVisit": "The start.",
-        "revisit": "The start."
-      },
+      "name": "Wheel Room",
+      "description": [
+        {
+          "when": [{ "type": "flagCheck", "flag": "player_restrained", "value": true }],
+          "firstVisit": "When my eyes adjust to the light, what I see makes me gasp with terror. In front of me, a 10-foot tall, 30-foot wide glass wall reflects back a terrible scene: I'm bound to a huge wheel, metal fittings lashing my arms, legs and head.\n\nBefore I have time to think anything else, I feel a shudder, a sound of rushing air, and a click. Yellow plumes of fire begin to jet out of each of the spokes of the wheel.",
+          "revisit": "From an odd angle, I can see my terrified face look back at me from the mirror. I'm lashed tight. I can feel the keyboard under my fingertips."
+        },
+        {
+          "firstVisit": "The wheel stands still in the centre of the room.",
+          "revisit": "The wheel room."
+        }
+      ],
       "exits": {
         "south": {
           "dest": "infant_2",
@@ -20,9 +27,16 @@
           "blockedMsg": "The door is shut."
         }
       },
-      "isLit": false,
+      "isLit": { "type": "flagCheck", "flag": "lights_on", "value": true },
+      "suppressListing": { "type": "flagCheck", "flag": "player_restrained", "value": true },
       "darkName": "Almost darkness",
-      "darkDesc": "Two spotlights light up two lecterns ahead of me. I feel a keyboard underneath my fingers."
+      "darkDesc": "Two spotlights light up two lecterns ahead of me. I feel a keyboard underneath my fingers.",
+      "afterTurn": [
+        {
+          "when": [{ "type": "flagCheck", "flag": "wheel_turning", "value": true }],
+          "text": "The wheel turns."
+        }
+      ]
     },
     "infant_2": {
       "name": "The Infant (2)",

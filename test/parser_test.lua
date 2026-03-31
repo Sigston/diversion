@@ -632,6 +632,42 @@ local function run(printFn)
         "\n\nExits: north.")
 
     -- -----------------------------------------------------------------------
+    header("text directives")
+    -- notice_board: scenery in player_quarters; description has [FIRST] block.
+    -- magic_coin:   listed:false in player_quarters; description has [ONE OF].
+    -- -----------------------------------------------------------------------
+
+    local function checkOneOf(description, input, options)
+        local output = Parser.process(input)
+        for _, opt in ipairs(options) do
+            if output == opt then
+                printFn("PASS: " .. description)
+                passed = passed + 1
+                return
+            end
+        end
+        printFn("FAIL: " .. description)
+        printFn("  input: " .. input)
+        printFn("  got:   " .. tostring(output))
+        local parts = {}
+        for _, o in ipairs(options) do parts[#parts + 1] = '"' .. o .. '"' end
+        printFn("  expected one of: " .. table.concat(parts, " | "))
+        failed = failed + 1
+    end
+
+    check("[FIRST] block shown on first examine",
+        "examine notice board",
+        "A notice board. A fresh notice is pinned to it.")
+
+    check("[FIRST] block absent on second examine",
+        "examine notice board",
+        "A notice board.")
+
+    checkOneOf("[ONE OF] returns a valid option",
+        "examine coin",
+        { "Heads.", "Tails." })
+
+    -- -----------------------------------------------------------------------
     printFn("\n" .. passed .. " passed, " .. failed .. " failed.")
     return passed, failed
 end

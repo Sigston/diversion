@@ -4,9 +4,7 @@
     "aliases": ["door"],
     "adjectives": ["south", "heavy"],
     "description": "A heavy door with no handle or lock.",
-    "specialDesc": "A heavy door with no handle and no lock stands to the south.",
     "location": "start_1",
-    "isOpen": false,
     "otherSide": "start_door_b",
     "fixed": true,
     "listed": false
@@ -15,7 +13,6 @@
     "name": "door",
     "description": "A heavy door.",
     "location": "infant_2",
-    "isOpen": false,
     "otherSide": "start_door",
     "fixed": true,
     "listed": false,
@@ -28,32 +25,31 @@
     "location": "start_1",
     "portable": false,
     "visibleInDark": true,
-    "typeDefault": "The cursor blinks. Nothing happens.",
+    "typeDefault": "Nothing happens.",
     "typeResponses": [
       {
         "phrases": ["fiat lux"],
         "when": [{ "type": "flagCheck", "flag": "lights_on", "value": false }],
-        "effects": [{ "type": "setFlag", "flag": "lights_on", "value": true }],
-        "text": "There is a flash, and suddenly the room is illuminated.\n\nCorrugated metal walls. A great mirror covers the wall opposite — and in it you can see yourself, lashed to an enormous wheel of fire. Writing is scrawled across the glass. To the south, a heavy door bears an inscription above its frame."
+        "effects": [
+          { "type": "setFlag", "flag": "lights_on", "value": true },
+          { "type": "setFlag", "flag": "wheel_turning", "value": true }
+        ],
+        "text": "There is another noise like a breaker being switched, and blinding light floods the room.[PAUSE]",
+        "redescribe": true
       },
       {
-        "phrases": ["fiat lux"],
-        "text": "The lights are already on."
+        "phrases": ["ixion"],
+        "when": [{ "type": "flagCheck", "flag": "player_restrained", "value": true }],
+        "text": "Nothing happens. Perhaps I need to use a command word first?"
       },
       {
         "phrases": ["unbind ixion", "free ixion", "release ixion", "liberate ixion", "let go ixion"],
         "when": [{ "type": "flagCheck", "flag": "player_restrained", "value": true }],
-        "effects": [{ "type": "setFlag", "flag": "player_restrained", "value": false }],
-        "text": "The wheel shudders and slows. The flames gutter out. The straps fall away and you step free onto the floor.\n\nBehind where the wheel stood, a 4\u00d74 grid of lock boxes is set into the wall. The upper three rows are out of reach from here."
-      },
-      {
-        "phrases": ["unbind ixion", "free ixion", "release ixion", "liberate ixion", "let go ixion"],
-        "text": "You are no longer bound to the wheel."
-      },
-      {
-        "phrases": ["exit tartarus", "leave tartarus"],
-        "when": [{ "type": "flagCheck", "flag": "player_restrained", "value": true }],
-        "text": "You are bound to the wheel. You cannot go anywhere."
+        "effects": [
+          { "type": "setFlag", "flag": "player_restrained", "value": false },
+          { "type": "setFlag", "flag": "wheel_turning", "value": false }
+        ],
+        "text": "At first I think the solution wasn't right, but then the wheel sets me to a more sensible orientation towards the ground, and the metal fittings snap free. I slump to the floor.[PAUSE]Now that I'm no longer spinning, I can see the room more clearly. It's rectangular in shape, with one long wall being taken up with the mirror, and the other containing twelve boxes. The wheel stands in the centre. On one of the shorter walls is a table with two books on it. There is a door on the other side of the room."
       },
       {
         "phrases": ["exit tartarus", "leave tartarus"],
@@ -72,36 +68,35 @@
   },
   "ixion_wheel": {
     "name": "wheel",
-    "aliases": ["wheel"],
+    "aliases": ["wheel", "spokes", "spoke", "fittings"],
     "adjectives": ["great", "spinning", "fiery", "Ixion's"],
-    "description": "A great wheel, ten feet across. You are lashed to it.",
-    "specialDesc": "A great wheel of fire dominates the room, spinning slowly. You are lashed to it.",
+    "description": "It's hard to see much of the wheel from your position, but through the mirror you can see that it has five spokes, each spitting fire, and a terrified individual pinned to the centre.",
     "location": "start_1",
     "fixed": true,
     "listed": false
   },
   "start_mirror": {
     "name": "mirror",
-    "aliases": ["mirror", "glass", "reflection"],
+    "aliases": ["mirror", "glass", "reflection", "wall"],
     "adjectives": ["great", "huge", "wall"],
-    "description": "A mirror covering the entire wall opposite you. In it you can see yourself, lashed to the wheel.",
-    "specialDesc": "A great mirror covers the entire wall opposite. In it, you can see yourself lashed to the wheel, and writing scrawled across the glass.",
+    "description": "A mirror covering the entire wall opposite you. In it you can see yourself, lashed to the wheel. There is writing scrawled across it.",
     "location": "start_1",
     "fixed": true,
     "listed": false
   },
   "mirror_writing": {
-    "name": "clue",
-    "aliases": ["clue", "scrawl"],
+    "name": "mirror writing",
+    "aliases": ["writing"],
     "adjectives": ["mirror"],
-    "description": "A crossword clue, scrawled in marker across the mirror. [TO BE WRITTEN]",
+    "description": "This sentence is scrawled across the mirror: [I]You're bound to a wheel! I mark the spot with charge.[/I]",
+    "readDesc": "[I]You're bound to a wheel! I mark the spot with charge.[/I]",
     "location": "start_1",
     "fixed": true,
     "scenery": true
   },
   "lockbox_grid": {
     "name": "boxes",
-    "aliases": ["boxes", "lockboxes", "grid", "wall"],
+    "aliases": ["boxes", "lockboxes", "grid"],
     "adjectives": ["lock", "box"],
     "description": "A 4x4 grid of lock boxes set into the wall behind the wheel. Each has a small dial with letters on it. The upper three rows are out of reach from here.",
     "location": "start_1",
@@ -144,7 +139,15 @@
   "spotlights": {
     "name": "spotlights",
     "aliases": ["spotlight", "light", "lights", "shaft", "shafts"],
-    "description": "Two shafts of light illuminate two lecterns. I can't see where the light comes from, the source is far too bright.",
+    "description": [
+      {
+        "when": [{"type": "flagCheck", "flag": "lights_on", "value": false}],
+        "text": "Two shafts of light illuminate two lecterns. I can't see where the light comes from, the source is far too bright."
+      },
+      {
+        "text": "Now that the main lights are on, I can't see the spotlights."
+      }
+    ],
     "location": "start_1",
     "fixed": true,
     "scenery": true,
@@ -152,10 +155,9 @@
   },
   "lectern_a": {
     "name": "left lectern",
-    "aliases": ["lectern"],
+    "aliases": ["lectern", "lecterns"],
     "adjectives": ["first", "left"],
     "description": "A wooden lectern, lit from above by a spotlight. It has a newspaper article attached to it, which I can just make out from here.",
-    "specialDesc": "Two lecterns stand to one side, each lit by its own spotlight.",
     "location": "start_1",
     "fixed": true,
     "listed": false,
@@ -163,7 +165,7 @@
   },
   "lectern_b": {
     "name": "right lectern",
-    "aliases": ["lectern"],
+    "aliases": ["lectern", "lecterns"],
     "adjectives": ["second", "right"],
     "description": "A wooden lectern, lit from above by a spotlight. It has a a block of text written out by what looks like a typewriter. It is titled \"Cross Words\".",
     "location": "start_1",
@@ -174,8 +176,8 @@
   "lectern_a_writing": {
     "name": "article",
     "aliases": ["article", "newspaper", "cutting", "clipping"],
-    "description": "A newspaper article, pasted down onto the left lectern. I can just make out the text.",
-    "readDesc": "[TO BE WRITTEN — newspaper article about the captor's greatness]",
+    "description": "The newspaper article, somewhat yellowed with age, is pasted down onto the left lectern. I can just make out the text.",
+    "readDesc": "The newspaper article is titled \"No Cross Words for New Holder\" and is dated to 1997.\n\n[I]This month the prestigious periodical \"Puzzle Quarterly\" will see its editorship change hands. Under the creative control of \"Parrot\" over the last twenty years, this initially niche magazine has seen its readership blossom, and now regularly reaches 80,000 eager readers. \"Holder\" certainly has big shoes to fill. Profoundly private, we caught up with the new editor not over a coffee, but by \"e-mail\".\n\nWe asked Holder how he first got into puzzles.\n\n\"When I was young, I was mostly entertained via correspondence chess and correspondence puzzles. As a home-schooled child, I had many friends with whom to correspond - other home-schooled children. We would set each other elaborate puzzles where everything in the envelope played a part, even how the address was written on the front.\"\n\nFrom these humble yet strange origins, Holder has grown to become the most in-demand setter in the puzzle world. Known for his dense, linguistically-focussed puzzles referencing literature and mythology from across the ages, he has been known to flumox many a puzzle completer. We leave the last word to Holder themselves:\n\n\"It is a joy to be able to do this for my living. It is a meagre living, but worthwhile.\"[/I]",
     "location": "start_1",
     "fixed": true,
     "scenery": true,
@@ -185,8 +187,8 @@
     "name": "document",
     "aliases": ["document", "text", "typewriting", "cross words", "words"],
     "adjectives": ["typewritten", "cross"],
-    "description": "A block of typewritten text on the lectern, titled \"Cross Words\". I can just about read it from here.",
-    "readDesc": "[TO BE WRITTEN — the Cross Words document; introduces captor. Clue for FIAT LUX is a deliberate misspelling: \"Why don't you lat in the light?\"]",
+    "description": "A single piece of paper with typewritten text sits on the lectern, titled \"Cross Words\". I can just about read it from here.",
+    "readDesc": "[FIRST]The piece of paper has a short message, which reads as follows:\n\n[FIRST END][I]Hello my dear boy. You may be wondering where you are. You may be wondering what is happening to you. You don't know me. Well, you know \"Holder\", but you don't know me. But I do know you. I wonder if in all your setting you've had to solve a puzzle like this? Either way, I shouldn't say too much, as there is much to come. And I'd rather leave you in the dark - ha ha.\n\nWhy don't you lat in the light? God said it in the beginning, on the first day. Flat, you take 9 and mess it up.[/I][FIRST]\n\nHolder? I remember them as a setter when I was just getting started. Have I been kidnapped by a crossword setter?[FIRST END]",
     "location": "start_1",
     "fixed": true,
     "scenery": true,

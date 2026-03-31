@@ -1,3 +1,4 @@
 {
-  "doorsCloseOnExit": false
+  "doorsCloseOnExit": false,
+  "integrityCheck": false
 }

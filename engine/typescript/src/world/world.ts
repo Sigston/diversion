@@ -26,6 +26,7 @@ const initialState: Record<string, ObjectSnap | RoomSnap> = {}
 // ---------------------------------------------------------------------------
 
 function isIlluminated(room: Room): boolean {
+    if (typeof room.isLit === 'function') return room.isLit()
     return room.isLit !== false
 }
 
@@ -330,7 +331,10 @@ export const World = {
         let out = parts[0] + '\n' + room.description(room, ctx)
 
         // Steps 6–7: Object listing and exit listing.
-        if (!room.suppressListing) {
+        const suppress = typeof room.suppressListing === 'function'
+            ? room.suppressListing()
+            : room.suppressListing
+        if (!suppress) {
             const listing = listContents(room, { excluded })
             if (listing) out += '\n\n' + listing
 

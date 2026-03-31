@@ -11,13 +11,33 @@
 --   Parser.process(rawInput) -> string
 --   Parser.reset()           -> resets FSM state (call between test runs)
 
-local Tokeniser  = require("engine.lua.parser.tokeniser")
-local Tagger     = require("engine.lua.parser.tagger")
-local Resolver   = require("engine.lua.parser.resolver")
-local Dispatcher = require("engine.lua.parser.dispatcher")
-local Stopwords  = require("engine.lua.lexicon.stopwords")
+local Tokeniser       = require("engine.lua.parser.tokeniser")
+local Tagger          = require("engine.lua.parser.tagger")
+local Resolver        = require("engine.lua.parser.resolver")
+local Dispatcher      = require("engine.lua.parser.dispatcher")
+local Stopwords       = require("engine.lua.lexicon.stopwords")
+local World           = require("engine.lua.world.world")
+local TextProcessor   = require("engine.lua.world.text_processor")
 
 local Parser = {}
+
+-- ---------------------------------------------------------------------------
+-- applyAfterTurn — appends the first matching afterTurn rule's text (if any)
+-- to a non-empty output string.
+-- ---------------------------------------------------------------------------
+local function applyAfterTurn(output)
+    if output == "" then return output end
+    local room = World.currentRoom()
+    if not room.afterTurn then return output end
+    for _, rule in ipairs(room.afterTurn) do
+        local ok = true
+        for _, cond in ipairs(rule.conditions) do
+            if not cond() then ok = false; break end
+        end
+        if ok then return output .. "\n\n" .. rule.text end
+    end
+    return output
+end
 
 -- FSM state
 local state   = "NORMAL"
@@ -80,7 +100,7 @@ local function handleClarification(rawInput)
     resolvedIntent[pending.which .. "Ref"] = matched  -- sets dobjRef or iobjRef
     state   = "NORMAL"
     pending = nil
-    return Dispatcher.dispatch(resolvedIntent)
+    return TextProcessor.process(applyAfterTurn(Dispatcher.dispatch(resolvedIntent)))
 end
 
 -- ---------------------------------------------------------------------------
@@ -128,7 +148,7 @@ function Parser.process(rawInput)
     if extra.dobj then prefix = prefix .. "(the " .. extra.dobj.name .. ") " end
     if extra.iobj then prefix = prefix .. "(the " .. extra.iobj.name .. ") " end
 
-    return prefix .. output
+    return TextProcessor.process(applyAfterTurn(prefix .. output))
 end
 
 -- Resets disambiguation state. Call between test runs.

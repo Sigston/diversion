@@ -124,5 +124,25 @@
     "description": "A small velvet pouch, tied with a drawstring.",
     "location": "chest",
     "portable": true
+  },
+  "notice_board": {
+    "name": "notice board",
+    "aliases": ["board"],
+    "adjectives": ["notice"],
+    "description": "A notice board.[FIRST] A fresh notice is pinned to it.[FIRST END]",
+    "location": "player_quarters",
+    "portable": false,
+    "fixed": true,
+    "scenery": true,
+    "notImportantMsg": "The notice board is fixed to the wall."
+  },
+  "magic_coin": {
+    "name": "coin",
+    "aliases": ["coin"],
+    "adjectives": ["magic", "old"],
+    "description": "[ONE OF]Heads.[OR]Tails.[ONE OF END]",
+    "location": "player_quarters",
+    "portable": true,
+    "listed": false
   }
 }

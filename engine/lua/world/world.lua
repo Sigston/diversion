@@ -84,8 +84,9 @@ end
 
 -- Returns true if the room has ambient light.
 -- Default: lit (isLit == nil or isLit == true).
--- Override in JSON: "isLit": false for dark rooms.
+-- isLit may be a boolean or a compiled condition closure (from a flagCheck).
 local function isIlluminated(room)
+    if type(room.isLit) == "function" then return room.isLit() end
     return room.isLit ~= false
 end
 
@@ -524,7 +525,10 @@ function World.describeCurrentRoom()
     local out = parts[1] .. "\n" .. desc
 
     -- Steps 6–7: Object listing and exit listing (unless suppressed).
-    if not room.suppressListing then
+    local suppress = type(room.suppressListing) == "function"
+                     and room.suppressListing()
+                      or room.suppressListing
+    if not suppress then
         local listing = listContents(room, ctx)
         if listing then out = out .. "\n\n" .. listing end
 

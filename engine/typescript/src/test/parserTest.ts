@@ -119,12 +119,14 @@ export function runTests(print: PrintFn, colours: Record<string, string>): void 
         'Entrance Passage\n' +
         'A narrow stone passage leads away from your quarters. ' +
         'Bare walls, bare floor. The way back is to the south.' +
-        '\n\nExits: south.')
+        '\n\nA heavy wooden door stands to the east.' +
+        '\n\nExits: east, south.')
 
     check('second look in new room gives short desc', 'look',
         'Entrance Passage\n' +
         'The entrance passage. Bare stone.' +
-        '\n\nExits: south.')
+        '\n\nA heavy wooden door stands to the east.' +
+        '\n\nExits: east, south.')
 
     check('go east blocked (connector present but canPass false)', 'go east',
         'The door is locked shut.')
@@ -143,7 +145,8 @@ export function runTests(print: PrintFn, colours: Record<string, string>): void 
     check('bare north moves room', 'north',
         'Entrance Passage\n' +
         'The entrance passage. Bare stone.' +
-        '\n\nExits: south.')
+        '\n\nA heavy wooden door stands to the east.' +
+        '\n\nExits: east, south.')
 
     check("bare 's' abbreviation moves back", 's',
         'Your Quarters\n' +
@@ -155,7 +158,8 @@ export function runTests(print: PrintFn, colours: Record<string, string>): void 
     check("bare 'n' abbreviation moves again", 'n',
         'Entrance Passage\n' +
         'The entrance passage. Bare stone.' +
-        '\n\nExits: south.')
+        '\n\nA heavy wooden door stands to the east.' +
+        '\n\nExits: east, south.')
 
     check('bare direction with blocked connector', 'east',
         'The door is locked shut.')
@@ -239,43 +243,70 @@ export function runTests(print: PrintFn, colours: Record<string, string>): void 
     // -----------------------------------------------------------------------
     header('connectors')
     // Player is in player_quarters (reset). Go north to entrance_passage first.
+    // copper_key is in inventory; iron_key is on the desk (out of scope here).
+    // passage_door is in entrance_passage, locked.
     // -----------------------------------------------------------------------
 
     check('go north to entrance passage (setup for connector tests)', 'north',
         'Entrance Passage\n' +
         'The entrance passage. Bare stone.' +
-        '\n\nExits: south.')
+        '\n\nA heavy wooden door stands to the east.' +
+        '\n\nExits: east, south.')
 
     check('blocked connector returns blockedMsg', 'east',
         'The door is locked shut.')
 
-    check('listExits hides blocked connector', 'look',
+    check('listExits shows blocked connector', 'look',
         'Entrance Passage\n' +
         'The entrance passage. Bare stone.' +
-        '\n\nExits: south.')
+        '\n\nA heavy wooden door stands to the east.' +
+        '\n\nExits: east, south.')
 
-    State.set('test_passage_open', true)
+    check('examine door', 'examine door',
+        'A heavy wooden door, iron-banded. A keyhole sits below the handle.')
 
-    check('unblocked connector traverses with traversalMsg', 'east',
+    check('unlock door with no key', 'unlock door',
+        "You'll need a key for that.")
+
+    check('unlock door with copper key', 'unlock door with copper key',
+        'Unlocked.')
+
+    check('unlocked connector traverses with traversalMsg', 'east',
         'You push through the heavy door.\n\n' +
         'Blocked Passage\n' +
         'A short corridor. The way back is west.' +
+        '\n\nA heavy wooden door stands to the west.' +
         '\n\nExits: west.')
 
     check('listExits shows unblocked connector from destination', 'look',
         'Blocked Passage\n' +
         'A short corridor. The way back is west.' +
+        '\n\nA heavy wooden door stands to the west.' +
         '\n\nExits: west.')
+
+    check('examine door from other side', 'examine door',
+        'A heavy wooden door, iron-banded. The handle is on the other side.')
+
+    check('lock door from other side mirrors to entrance_passage side', 'lock door with copper key',
+        'Locked.')
+
+    check('door is now blocked from other side', 'west',
+        'The door is locked shut.')
+
+    check('unlock door from other side mirrors back', 'unlock door with copper key',
+        'Unlocked.')
+
+    check('can go west after unlocking from other side', 'west',
+        'You push back through the heavy door.\n\n' +
+        'Entrance Passage\n' +
+        'The entrance passage. Bare stone.' +
+        '\n\nA heavy wooden door stands to the east.' +
+        '\n\nExits: east, south.')
 
     // -----------------------------------------------------------------------
     header('open / close')
-    // Navigate back to player_quarters where the chest is.
+    // Player is in entrance_passage after connector tests. Navigate south.
     // -----------------------------------------------------------------------
-
-    check('west back to entrance passage', 'west',
-        'Entrance Passage\n' +
-        'The entrance passage. Bare stone.' +
-        '\n\nExits: east, south.')
 
     check('south back to player quarters', 'south',
         'Your Quarters\n' +
@@ -340,6 +371,37 @@ export function runTests(print: PrintFn, colours: Record<string, string>): void 
     check('take iron key from open drawer', 'take iron key', 'Taken.')
     check('inventory shows iron key and copper key', 'inventory',
         'You are carrying: copper key, iron key.')
+
+    // -----------------------------------------------------------------------
+    header('text directives')
+    // notice_board: scenery in player_quarters; description has [FIRST] block.
+    // magic_coin:   listed:false in player_quarters; description has [ONE OF].
+    // -----------------------------------------------------------------------
+
+    function checkOneOf(description: string, input: string, options: string[]): void {
+        const output = process(input)
+        if (options.includes(output)) {
+            print('PASS: ' + description, colours.system)
+            passed++
+        } else {
+            print('FAIL: ' + description, colours.error)
+            print('  got:      ' + JSON.stringify(output), colours.error)
+            print('  expected: ' + options.map(o => JSON.stringify(o)).join(' | '), colours.error)
+            failed++
+        }
+    }
+
+    check('[FIRST] block shown on first examine',
+        'examine notice board',
+        'A notice board. A fresh notice is pinned to it.')
+
+    check('[FIRST] block absent on second examine',
+        'examine notice board',
+        'A notice board.')
+
+    checkOneOf('[ONE OF] returns a valid option',
+        'examine coin',
+        ['Heads.', 'Tails.'])
 
     // -----------------------------------------------------------------------
     print('', colours.system)

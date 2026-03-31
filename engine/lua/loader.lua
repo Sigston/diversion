@@ -29,6 +29,22 @@ local function readFile(path)
 end
 
 -- ---------------------------------------------------------------------------
+-- assignFirstIds — replaces every [FIRST] tag in a string with [FIRST:N]
+-- using a module-level counter. Called on all text fields during loading so
+-- authors write plain [FIRST] and IDs are assigned automatically.
+-- Returns non-string values unchanged.
+-- ---------------------------------------------------------------------------
+local firstIdCounter = 0
+local function assignFirstIds(text)
+    if type(text) ~= "string" then return text end
+    return (text:gsub("%[FIRST%]", function()
+        local id = firstIdCounter
+        firstIdCounter = firstIdCounter + 1
+        return "[FIRST:" .. id .. "]"
+    end))
+end
+
+-- ---------------------------------------------------------------------------
 -- makeConnector — normalises a raw JSON exit value to a connector table.
 --
 -- JSON forms:
@@ -44,8 +60,8 @@ local function makeConnector(raw)
     end
     local conn = {
         dest         = raw.dest,
-        traversalMsg = raw.traversalMsg,
-        blockedMsg   = raw.blockedMsg,
+        traversalMsg = assignFirstIds(raw.traversalMsg),
+        blockedMsg   = assignFirstIds(raw.blockedMsg),
         door         = raw.door,
     }
     if raw.condition then
@@ -77,18 +93,6 @@ end
 --   function(self, ctx) → string
 -- where self is the room table (carries .visited) and ctx is the world context.
 -- ---------------------------------------------------------------------------
-local function makeDescription(desc)
-    if type(desc) == "string" then
-        return function(_self, _ctx) return desc end
-    end
-    local first   = desc.firstVisit
-    local revisit = desc.revisit
-    return function(self, _ctx)
-        if not self.visited then return first end
-        return revisit
-    end
-end
-
 -- ---------------------------------------------------------------------------
 -- makeCondition — compiles a JSON condition object to a boolean closure.
 -- Condition types match the connector condition schema:
@@ -110,6 +114,92 @@ local function makeCondition(cond)
         end
     end
     return function() return true end  -- unknown type; always pass
+end
+
+-- ---------------------------------------------------------------------------
+-- makeDescription — converts a room description from JSON to a function.
+--
+-- JSON format:
+--   plain string             → always returns that string
+--   { firstVisit, revisit }  → first-visit text once, short text thereafter
+--   array of blocks          → first block whose when[] conditions all pass wins;
+--                              a block with no when is an unconditional fallback
+--
+-- The returned function matches the room description contract:
+--   function(self, ctx) → string
+-- where self is the room table (carries .visited) and ctx is the world context.
+-- ---------------------------------------------------------------------------
+local function makeDescription(desc)
+    if type(desc) == "string" then
+        local text = assignFirstIds(desc)
+        return function(self, _ctx) return text end
+    end
+    -- Array of conditional blocks: first matching when[] wins; no when = fallback.
+    if desc[1] ~= nil then
+        local blocks = {}
+        for _, block in ipairs(desc) do
+            local conditions = {}
+            for _, cond in ipairs(block.when or {}) do
+                conditions[#conditions + 1] = makeCondition(cond)
+            end
+            blocks[#blocks + 1] = {
+                conditions = conditions,
+                firstVisit = assignFirstIds(block.firstVisit or ""),
+                revisit    = assignFirstIds(block.revisit    or ""),
+            }
+        end
+        return function(self, _ctx)
+            for _, block in ipairs(blocks) do
+                local ok = true
+                for _, cond in ipairs(block.conditions) do
+                    if not cond() then ok = false; break end
+                end
+                if ok then
+                    return self.visited and block.revisit or block.firstVisit
+                end
+            end
+            return ""
+        end
+    end
+    local first   = assignFirstIds(desc.firstVisit or "")
+    local revisit = assignFirstIds(desc.revisit    or "")
+    return function(self, _ctx)
+        if not self.visited then return first end
+        return revisit
+    end
+end
+
+-- ---------------------------------------------------------------------------
+-- makeObjectDescription — converts an object description from JSON.
+-- Plain string → kept as string (assignFirstIds applied).
+-- Array of blocks → function(self, ctx) → string; first matching when[] wins.
+-- Each block uses "text" (no firstVisit/revisit — objects don't track visits).
+-- ---------------------------------------------------------------------------
+local function makeObjectDescription(desc)
+    if type(desc) ~= "table" or desc[1] == nil then
+        return assignFirstIds(desc or "")
+    end
+    local blocks = {}
+    for _, block in ipairs(desc) do
+        local conditions = {}
+        for _, cond in ipairs(block.when or {}) do
+            conditions[#conditions + 1] = makeCondition(cond)
+        end
+        blocks[#blocks + 1] = {
+            conditions = conditions,
+            text       = assignFirstIds(block.text or ""),
+        }
+    end
+    return function(_self, _ctx)
+        for _, block in ipairs(blocks) do
+            local ok = true
+            for _, cond in ipairs(block.conditions) do
+                if not cond() then ok = false; break end
+            end
+            if ok then return block.text end
+        end
+        return ""
+    end
 end
 
 -- ---------------------------------------------------------------------------
@@ -160,6 +250,11 @@ local terminalTypeHandler = {
                 end
                 if ok then
                     for _, eff in ipairs(rule.effects) do eff() end
+                    if rule.redescribe then
+                        local room = World.currentRoom()
+                        room.visited = false
+                        return rule.text .. "\n\n" .. World.describeCurrentRoom()
+                    end
                     return rule.text
                 end
             end
@@ -219,10 +314,36 @@ function Loader.load(dataPath)
             visited     = false,
         }
         -- Optional room properties
-        if data.isLit          ~= nil then rooms[key].isLit          = data.isLit          end
+        if data.isLit ~= nil then
+            if type(data.isLit) == "table" then
+                rooms[key].isLit = makeCondition(data.isLit)
+            else
+                rooms[key].isLit = data.isLit
+            end
+        end
         if data.darkName       ~= nil then rooms[key].darkName       = data.darkName       end
-        if data.darkDesc       ~= nil then rooms[key].darkDesc       = data.darkDesc       end
-        if data.suppressListing ~= nil then rooms[key].suppressListing = data.suppressListing end
+        if data.darkDesc       ~= nil then rooms[key].darkDesc       = assignFirstIds(data.darkDesc) end
+        if data.suppressListing ~= nil then
+            if type(data.suppressListing) == "table" then
+                rooms[key].suppressListing = makeCondition(data.suppressListing)
+            else
+                rooms[key].suppressListing = data.suppressListing
+            end
+        end
+        if data.afterTurn ~= nil then
+            local compiled = {}
+            for _, rule in ipairs(data.afterTurn) do
+                local conditions = {}
+                for _, cond in ipairs(rule.when or {}) do
+                    conditions[#conditions + 1] = makeCondition(cond)
+                end
+                compiled[#compiled + 1] = {
+                    conditions = conditions,
+                    text       = assignFirstIds(rule.text),
+                }
+            end
+            rooms[key].afterTurn = compiled
+        end
     end
 
     -- Build objects table
@@ -232,7 +353,7 @@ function Loader.load(dataPath)
             name        = data.name,
             aliases     = data.aliases    or {},
             adjectives  = data.adjectives or {},
-            description = data.description or "",
+            description = makeObjectDescription(data.description),
             location    = data.location,   -- may be nil (JSON null)
             portable    = data.portable,
             handlers    = {},
@@ -247,25 +368,25 @@ function Loader.load(dataPath)
         if data.remapIn                ~= nil then obj.remapIn                = data.remapIn                end
         if data.remapOn                ~= nil then obj.remapOn                = data.remapOn                end
         if data.listed                 ~= nil then obj.listed                 = data.listed                 end
-        if data.specialDesc            ~= nil then obj.specialDesc            = data.specialDesc            end
-        if data.initSpecialDesc        ~= nil then obj.initSpecialDesc        = data.initSpecialDesc        end
+        if data.specialDesc            ~= nil then obj.specialDesc            = assignFirstIds(data.specialDesc)     end
+        if data.initSpecialDesc        ~= nil then obj.initSpecialDesc        = assignFirstIds(data.initSpecialDesc) end
         if data.specialDescBeforeContents ~= nil then obj.specialDescBeforeContents = data.specialDescBeforeContents end
         if data.specialDescOrder       ~= nil then obj.specialDescOrder       = data.specialDescOrder       end
         if data.stateDesc ~= nil then
             if type(data.stateDesc) == "table" then
-                local openMsg   = data.stateDesc.open
-                local closedMsg = data.stateDesc.closed
+                local openMsg   = assignFirstIds(data.stateDesc.open)
+                local closedMsg = assignFirstIds(data.stateDesc.closed)
                 obj.stateDesc = function(self)
                     return self.isOpen and openMsg or closedMsg
                 end
             else
-                obj.stateDesc = data.stateDesc
+                obj.stateDesc = assignFirstIds(data.stateDesc)
             end
         end
-        if data.visibleInDark          ~= nil then obj.visibleInDark          = data.visibleInDark          end
-        if data.readDesc               ~= nil then obj.readDesc               = data.readDesc               end
-        if data.scenery                ~= nil then obj.scenery                = data.scenery                end
-        if data.notImportantMsg        ~= nil then obj.notImportantMsg        = data.notImportantMsg        end
+        if data.visibleInDark          ~= nil then obj.visibleInDark          = data.visibleInDark                  end
+        if data.readDesc               ~= nil then obj.readDesc               = assignFirstIds(data.readDesc)        end
+        if data.scenery                ~= nil then obj.scenery                = data.scenery                         end
+        if data.notImportantMsg        ~= nil then obj.notImportantMsg        = assignFirstIds(data.notImportantMsg) end
         if data.otherSide              ~= nil then obj.otherSide              = data.otherSide              end
         -- Compile typeResponses into runtime form and assign built-in handler.
         if data.typeResponses then
@@ -285,11 +406,12 @@ function Loader.load(dataPath)
                     phrases    = phrases,
                     conditions = conditions,
                     effects    = effects,
-                    text       = rule.text,
+                    text       = assignFirstIds(rule.text),
+                    redescribe = rule.redescribe or false,
                 }
             end
             obj.typeResponses    = compiled
-            obj.typeDefault      = data.typeDefault
+            obj.typeDefault      = assignFirstIds(data.typeDefault)
             obj.handlers["type"] = terminalTypeHandler
         end
         objects[key] = obj
@@ -302,10 +424,17 @@ function Loader.load(dataPath)
         State.set(flag, value)
     end
 
-    -- Load help content from events.json.
-    World.loadHelp(eventsJson.help or {})
+    -- Load help content from events.json (process directives in help texts).
+    local help = eventsJson.help or {}
+    if help.default then help.default = assignFirstIds(help.default) end
+    if help.topics then
+        for k, v in pairs(help.topics) do
+            help.topics[k] = assignFirstIds(v)
+        end
+    end
+    World.loadHelp(help)
 
-    return eventsJson.intro or ""
+    return assignFirstIds(eventsJson.intro or "")
 end
 
 return Loader

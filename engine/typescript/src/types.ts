@@ -48,6 +48,11 @@ export interface Connector {
     canPass?:      () => boolean
 }
 
+export interface AfterTurnRule {
+    conditions: (() => boolean)[]
+    text:       string
+}
+
 export interface Room {
     name:             string
     description:      (self: Room, ctx: WorldContext) => string
@@ -55,10 +60,11 @@ export interface Room {
     objects:          string[]
     handlers:         Record<string, Handler>
     visited:          boolean
-    isLit?:           boolean
+    isLit?:           boolean | (() => boolean)
     darkName?:        string
     darkDesc?:        string | ((self: Room) => string)
-    suppressListing?: boolean
+    suppressListing?: boolean | (() => boolean)
+    afterTurn?:       AfterTurnRule[]
 }
 
 export type VerifyResult =

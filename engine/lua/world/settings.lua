@@ -14,6 +14,7 @@ local Settings = {}
 -- Defaults applied when a key is absent from settings.json.
 local defaults = {
     doorsCloseOnExit = true,
+    integrityCheck   = true,
 }
 
 local data = {}

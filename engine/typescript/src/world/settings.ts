@@ -11,6 +11,7 @@
 
 const defaults: Record<string, unknown> = {
     doorsCloseOnExit: true,
+    integrityCheck:   true,
 }
 
 let data: Record<string, unknown> = {}

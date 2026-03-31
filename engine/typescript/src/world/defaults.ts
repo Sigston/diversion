@@ -88,6 +88,7 @@ export const Defaults: Record<string, Handler> = {
             return { logical: true }
         },
         action(obj, _intent) {
+            if (!obj) return "You don't see that here."
             if (typeof obj.readDesc === 'function') return obj.readDesc(obj, World.currentContext())
             return obj.readDesc as string
         },

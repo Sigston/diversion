@@ -3,6 +3,7 @@ import { loadWorld }        from './world/loader.ts'
 import { World }            from './world/world.ts'
 import { process, reset as parserReset } from './parser/index.ts'
 import { State }            from './world/state.ts'
+import { Settings }         from './world/settings.ts'
 import { runTests }         from './test/parserTest.ts'
 
 // Load world from JSON before any parser or world operations.
@@ -15,7 +16,7 @@ const colours = {
     input:     '#99DDFF',
     response:  '#FFFFFF',
     roomTitle: '#E6D99A',
-    narrator:  '#CCCCCC',
+    narrator:  '#C8A870',
     error:     '#FF6666',
     system:    '#888888',
 }
@@ -45,18 +46,21 @@ let pendingSegments: string[] = []
 // The only function that writes to the output div.
 // Handles multi-line strings by splitting on newlines.
 // ---------------------------------------------------------------------------
-function print(text: string, colour: string): void {
+// appendLine — appends a single <p> line. italic=true adds font-style:italic.
+function appendLine(text: string, colour: string, italic = false): void {
+    const p = document.createElement('p')
+    p.style.color = colour
+    if (italic) p.style.fontStyle = 'italic'
+    p.textContent = text || '\u00a0'
+    output.appendChild(p)
+}
+
+function print(text: string, colour: string, italic = false): void {
     if (text === '') {
-        const p = document.createElement('p')
-        p.innerHTML = '&nbsp;'
-        p.style.color = colour
-        output.appendChild(p)
+        appendLine('', colour, italic)
     } else {
         for (const line of text.split('\n')) {
-            const p = document.createElement('p')
-            p.textContent = line
-            p.style.color = colour
-            output.appendChild(p)
+            appendLine(line, colour, italic)
         }
     }
     output.scrollTop = output.scrollHeight
@@ -93,28 +97,50 @@ function advancePause(): void {
 
 // ---------------------------------------------------------------------------
 // printOutput — applies colour heuristics to parser output.
-// Room descriptions come as "Title\nBody"; the first short line without
-// sentence-ending punctuation is coloured as a room title.
+// Pre-splits on [I]/[/I] so italic spans work across \n\n paragraph breaks,
+// then processes each chunk's paragraphs. Normal chunks get room-title
+// detection; italic chunks render in narrator colour with italic style.
 // ---------------------------------------------------------------------------
 function printOutput(text: string): void {
     if (!text) return
-    // Split on double newlines so a traversalMsg prefix is treated as its own
-    // block and the following room description still gets its title coloured.
-    const blocks = text.split('\n\n')
-    for (let i = 0; i < blocks.length; i++) {
-        if (i > 0) print('', colours.response)
-        const block = blocks[i]
-        const nl = block.indexOf('\n')
-        if (nl !== -1) {
-            const title = block.slice(0, nl)
-            const body  = block.slice(nl + 1)
-            if (title.length <= 40 && !/[.!?]/.test(title)) {
-                print(title, colours.roomTitle)
-                print(body,  colours.response)
-                continue
-            }
+
+    // Build ordered list of { text, italic } chunks by splitting on [I]/[/I].
+    type Chunk = { text: string; italic: boolean }
+    const chunks: Chunk[] = []
+    if (!text.includes('[I]') && !text.includes('[/I]')) {
+        chunks.push({ text, italic: false })
+    } else {
+        const firstOpen  = text.includes('[I]')  ? text.indexOf('[I]')  : Infinity
+        const firstClose = text.includes('[/I]') ? text.indexOf('[/I]') : Infinity
+        let italic = firstClose < firstOpen
+        for (const part of text.split(/(\[I\]|\[\/I\])/)) {
+            if (part === '[I]')  { italic = true;  continue }
+            if (part === '[/I]') { italic = false; continue }
+            if (part) chunks.push({ text: part, italic })
         }
-        print(block, colours.response)
+    }
+
+    let isFirst = true
+    for (const { text: chunk, italic } of chunks) {
+        const colour = italic ? colours.narrator : colours.response
+        for (const block of chunk.split('\n\n')) {
+            if (!block) continue
+            if (!isFirst) print('', colour)
+            isFirst = false
+            if (!italic) {
+                const nl = block.indexOf('\n')
+                if (nl !== -1) {
+                    const title = block.slice(0, nl)
+                    const body  = block.slice(nl + 1)
+                    if (title.length <= 40 && !/[.!?]/.test(title)) {
+                        print(title, colours.roomTitle)
+                        print(body,  colours.response)
+                        continue
+                    }
+                }
+            }
+            print(block, colour, italic)
+        }
     }
 }
 
@@ -209,16 +235,19 @@ fitToViewport()
 // ---------------------------------------------------------------------------
 // Startup: run tests, reset, then show prologue and starting room.
 // ---------------------------------------------------------------------------
-runTests(print, colours)
-print('', colours.system)
+if (Settings.get('integrityCheck') !== false) {
+    runTests(print, colours)
+    print('', colours.system)
+}
 print('--- game start ---', colours.system)
 print('', colours.system)
 
-// Reload diversion data so World.reset() uses the game snapshot, not the test snapshot.
+// Reload game data so World.reset() uses the game snapshot, not the test snapshot.
+// State.reset() first so loadWorld() applies clean initial flags from events.json.
+State.reset()
+parserReset()
 loadWorld()
 World.reset()
-parserReset()
-State.reset()
 
 const roomDesc = World.describeCurrentRoom()
 if (prologue) {

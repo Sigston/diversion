@@ -9,6 +9,24 @@ import { resolve, filterCandidates }                        from './resolver.ts'
 import type { ResolveFailAmbiguous }                        from './resolver.ts'
 import { dispatch }                                         from './dispatcher.ts'
 import type { GameObject }                                  from '../types.ts'
+import { World }                                            from '../world/world.ts'
+import { TextProcessor }                                    from '../world/textProcessor.ts'
+
+// ---------------------------------------------------------------------------
+// applyAfterTurn — appends the first matching afterTurn rule's text (if any)
+// to a non-empty output string.
+// ---------------------------------------------------------------------------
+function applyAfterTurn(output: string): string {
+    if (output === '') return output
+    const rules = World.currentRoom().afterTurn
+    if (!rules) return output
+    for (const rule of rules) {
+        if (rule.conditions.every(c => c())) {
+            return output + '\n\n' + rule.text
+        }
+    }
+    return output
+}
 
 // ---------------------------------------------------------------------------
 // Disambiguation state machine
@@ -50,7 +68,7 @@ function handleClarification(rawInput: string): string {
 
     state   = 'NORMAL'
     pending = null
-    return dispatch(resolvedIntent)
+    return TextProcessor.process(applyAfterTurn(dispatch(resolvedIntent)))
 }
 
 // ---------------------------------------------------------------------------
@@ -88,7 +106,7 @@ export function process(rawInput: string): string {
     if (result.auto.dobj) prefix += `(the ${result.auto.dobj.name}) `
     if (result.auto.iobj) prefix += `(the ${result.auto.iobj.name}) `
 
-    return prefix + output
+    return TextProcessor.process(applyAfterTurn(prefix + output))
 }
 
 // Resets disambiguation state. Call between test runs.

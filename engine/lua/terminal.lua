@@ -29,7 +29,7 @@ local C = {
     input      = { 0.600, 0.867, 1.000 },   -- #99DDFF  player input echo
     response   = { 1.000, 1.000, 1.000 },   -- #FFFFFF  standard response
     roomTitle  = { 0.902, 0.851, 0.604 },   -- #E6D99A  room name on entry
-    narrator   = { 0.800, 0.800, 0.800 },   -- #CCCCCC  AI narrator lines
+    narrator   = { 0.784, 0.659, 0.439 },   -- #C8A870  italic / narrator
     error_col  = { 1.000, 0.400, 0.400 },   -- #FF6666  failure messages
     system     = { 0.533, 0.533, 0.533 },   -- #888888  meta messages
     background = { 0.102, 0.102, 0.102 },   -- #1A1A1A  window background
@@ -84,44 +84,76 @@ local function pushLine(text, colour)
     renderDirty = true
 end
 
-local function printLines(text, colour)
-    if text == "" then
-        pushLine("", colour)
-        return
-    end
-    for segment in (text .. "\n"):gmatch("([^\n]*)\n") do
+-- pushSegment — pushes all newline-split sub-lines of a chunk with a given colour.
+local function pushSegment(chunk, colour)
+    for segment in (chunk .. "\n"):gmatch("([^\n]*)\n") do
         pushLine(segment, colour)
     end
+end
+
+-- printLines — splits a tag-free chunk on newlines and pushes each line.
+local function printLines(text, colour)
+    if text == "" then pushLine("", colour) return end
+    pushSegment(text, colour)
 end
 
 -- ---------------------------------------------------------------------------
 -- printOutput — applies colour heuristics to parser output.
 --
--- Room descriptions are returned as "Title\nBody" from the go and look
--- handlers. We detect this by checking for a short first line with no
--- sentence-ending punctuation. In Milestone 3, handlers will return
--- typed response objects instead, making this heuristic unnecessary.
+-- Pre-splits on [I]/[/I] so italic spans work correctly across \n\n paragraph
+-- boundaries, then processes each chunk's paragraphs independently.
+-- Normal chunks get room-title detection; italic chunks use narrator colour.
 -- ---------------------------------------------------------------------------
 local function printOutput(text)
     if text == "" then return end
-    -- Split on double newlines so a traversalMsg prefix is treated as its own
-    -- block and the following room description still gets its title coloured.
     local first = true
-    local start = 1
-    while true do
-        local s, e = text:find("\n\n", start, true)
-        local block = text:sub(start, s and s - 1 or nil)
-        if not first then pushLine("", C.response) end
-        first = false
-        local title, body = block:match("^([^\n]+)\n(.+)$")
-        if title and body and #title <= 40 and not title:match("[%.!%?]") then
-            pushLine(title, C.roomTitle)
-            printLines(body, C.response)
-        else
-            printLines(block, C.response)
+
+    -- printChunk: push all \n\n-separated paragraphs from one span.
+    local function printChunk(chunk, colour)
+        local start = 1
+        while true do
+            local s, e = chunk:find("\n\n", start, true)
+            local block = chunk:sub(start, s and s - 1 or nil)
+            if block ~= "" then
+                if not first then pushLine("", colour) end
+                first = false
+                local handled = false
+                if colour == C.response then
+                    local title, body = block:match("^([^\n]+)\n(.+)$")
+                    if title and body and #title <= 40 and not title:match("[%.!%?]") then
+                        pushLine(title, C.roomTitle)
+                        printLines(body, C.response)
+                        handled = true
+                    end
+                end
+                if not handled then printLines(block, colour) end
+            end
+            if not s then break end
+            start = e + 1
+        end
+    end
+
+    -- Fast path: no italic tags.
+    if not text:find("[I]", 1, true) and not text:find("[/I]", 1, true) then
+        printChunk(text, C.response)
+        return
+    end
+
+    -- Pre-split on [I]/[/I], alternating between normal and italic colour.
+    local hasOpen  = text:find("[I]",  1, true)
+    local hasClose = text:find("[/I]", 1, true)
+    local italic   = hasClose and (not hasOpen or hasClose < hasOpen)
+    local pos = 1
+    while pos <= #text do
+        local tag  = italic and "[/I]" or "[I]"
+        local s, e = text:find(tag, pos, true)
+        local chunk = text:sub(pos, s and s - 1 or nil)
+        if chunk ~= "" then
+            printChunk(chunk, italic and C.narrator or C.response)
         end
         if not s then break end
-        start = e + 1
+        pos    = e + 1
+        italic = not italic
     end
 end
 
@@ -311,22 +343,24 @@ function Terminal.init()
     World.reset()
 
     -- Run data integrity check; show errors and warnings before the game starts.
-    local function checkPrint(msg)
-        if msg == "" then return end
-        if msg:match("^ERROR:") then
-            pushLine(msg, C.error_col)
-        elseif msg:match("^WARNING:") then
-            pushLine(msg, C.narrator)
-        elseif msg:match("error") or msg:match("warning") then
-            -- summary line
-            local hasIssues = msg:match("^[^0]")
-            pushLine(msg, hasIssues and C.error_col or C.system)
-        else
-            pushLine(msg, C.system)
+    -- Suppressed when integrityCheck = false in settings.json; run manually via "check".
+    if Settings.get("integrityCheck") then
+        local function checkPrint(msg)
+            if msg == "" then return end
+            if msg:match("^ERROR:") then
+                pushLine(msg, C.error_col)
+            elseif msg:match("^WARNING:") then
+                pushLine(msg, C.narrator)
+            elseif msg:match("error") or msg:match("warning") then
+                local hasIssues = msg:match("^[^0]")
+                pushLine(msg, hasIssues and C.error_col or C.system)
+            else
+                pushLine(msg, C.system)
+            end
         end
+        local checkErrors = IntegrityCheck.run(Loader.currentPath, checkPrint)
+        if checkErrors > 0 then pushLine("", C.system) end
     end
-    local checkErrors = IntegrityCheck.run(Loader.currentPath, checkPrint)
-    if checkErrors > 0 then pushLine("", C.system) end
 
     -- Show prologue (if any) then the starting room description.
     local roomDesc = World.describeCurrentRoom()

@@ -67,27 +67,45 @@ interface ExitJson {
     door?:         string
 }
 interface TypeResponseJson {
-    phrases:  string[]
-    when?:    ConditionJson[]
-    effects?: EffectJson[]
-    text:     string
+    phrases:     string[]
+    when?:       ConditionJson[]
+    effects?:    EffectJson[]
+    text:        string
+    redescribe?: boolean
+}
+
+interface AfterTurnRuleJson {
+    when?: ConditionJson[]
+    text:  string
+}
+
+interface DescriptionBlockJson {
+    when?:       ConditionJson[]
+    firstVisit:  string
+    revisit:     string
+}
+
+interface ObjectDescBlockJson {
+    when?:  ConditionJson[]
+    text:   string
 }
 
 interface RoomJson {
     name:             string
-    description:      string | { firstVisit: string; revisit: string }
+    description:      string | { firstVisit: string; revisit: string } | DescriptionBlockJson[]
     exits:            Record<string, string | ExitJson>
-    isLit?:           boolean
+    isLit?:           boolean | ConditionJson
     darkName?:        string
     darkDesc?:        string
-    suppressListing?: boolean
+    suppressListing?: boolean | ConditionJson
+    afterTurn?:       AfterTurnRuleJson[]
 }
 
 interface ObjectJson {
     name:        string
     aliases:     string[]
     adjectives:  string[]
-    description: string
+    description: string | ObjectDescBlockJson[]
     location:    string | null
     portable:    boolean
     fixed?:      boolean
@@ -114,13 +132,23 @@ interface ObjectJson {
 }
 
 // ---------------------------------------------------------------------------
+// assignFirstIds — replaces every [FIRST] tag in a string with [FIRST:N]
+// using a module-level counter. Called on all text fields during loading so
+// authors write plain [FIRST] and IDs are assigned automatically.
+// ---------------------------------------------------------------------------
+let firstIdCounter = 0
+function assignFirstIds(text: string): string {
+    return text.replace(/\[FIRST\]/g, () => `[FIRST:${firstIdCounter++}]`)
+}
+
+// ---------------------------------------------------------------------------
 // makeConnector — normalises a raw JSON exit value to a Connector object.
 // ---------------------------------------------------------------------------
 function makeConnector(raw: string | ExitJson): Connector {
     if (typeof raw === 'string') return { dest: raw }
     const conn: Connector = { dest: raw.dest }
-    if (raw.traversalMsg) conn.traversalMsg = raw.traversalMsg
-    if (raw.blockedMsg)   conn.blockedMsg   = raw.blockedMsg
+    if (raw.traversalMsg) conn.traversalMsg = assignFirstIds(raw.traversalMsg)
+    if (raw.blockedMsg)   conn.blockedMsg   = assignFirstIds(raw.blockedMsg)
     if (raw.door)         conn.door         = raw.door
     if (raw.condition?.type === 'flagCheck') {
         const { flag, value } = raw.condition
@@ -139,12 +167,52 @@ function makeConnector(raw: string | ExitJson): Connector {
 // makeDescription — converts JSON description to the Room description function.
 // ---------------------------------------------------------------------------
 function makeDescription(
-    desc: string | { firstVisit: string; revisit: string }
+    desc: string | { firstVisit: string; revisit: string } | DescriptionBlockJson[]
 ): (self: Room, ctx: WorldContext) => string {
     if (typeof desc === 'string') {
-        return () => desc
+        const text = assignFirstIds(desc)
+        return () => text
     }
-    return (self) => self.visited ? desc.revisit : desc.firstVisit
+    if (Array.isArray(desc)) {
+        const blocks = desc.map(block => ({
+            conditions: (block.when ?? []).map(makeCondition),
+            firstVisit: assignFirstIds(block.firstVisit),
+            revisit:    assignFirstIds(block.revisit),
+        }))
+        return (self) => {
+            for (const block of blocks) {
+                if (block.conditions.every(c => c())) {
+                    return self.visited ? block.revisit : block.firstVisit
+                }
+            }
+            return ''
+        }
+    }
+    const firstVisit = assignFirstIds(desc.firstVisit)
+    const revisit    = assignFirstIds(desc.revisit)
+    return (self) => self.visited ? revisit : firstVisit
+}
+
+// ---------------------------------------------------------------------------
+// makeObjectDescription — converts an object description from JSON.
+// Plain string → string (assignFirstIds applied, compatible with existing handler).
+// Array of blocks → function; first block whose when[] conditions pass wins.
+// Uses "text" per block (no firstVisit/revisit — objects don't track visits yet).
+// ---------------------------------------------------------------------------
+function makeObjectDescription(
+    desc: string | ObjectDescBlockJson[]
+): string | ((self: GameObject, ctx: WorldContext) => string) {
+    if (typeof desc === 'string') return assignFirstIds(desc)
+    const blocks = desc.map(block => ({
+        conditions: (block.when ?? []).map(makeCondition),
+        text:       assignFirstIds(block.text),
+    }))
+    return () => {
+        for (const block of blocks) {
+            if (block.conditions.every(c => c())) return block.text
+        }
+        return ''
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -192,6 +260,7 @@ interface CompiledRule {
     conditions: (() => boolean)[]
     effects:    (() => void)[]
     text:       string
+    redescribe: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -217,6 +286,10 @@ const terminalTypeHandler: Handler = {
             if (rule.phrases.has(phrase)) {
                 if (rule.conditions.every(c => c())) {
                     rule.effects.forEach(e => e())
+                    if (rule.redescribe) {
+                        World.currentRoom().visited = false
+                        return rule.text + '\n\n' + World.describeCurrentRoom()
+                    }
                     return rule.text
                 }
             }
@@ -256,10 +329,24 @@ function buildWorld(
             handlers:    {},
             visited:     false,
         }
-        if (data.isLit           !== undefined) room.isLit           = data.isLit
+        if (data.isLit !== undefined) {
+            room.isLit = typeof data.isLit === 'object'
+                ? makeCondition(data.isLit) as unknown as boolean
+                : data.isLit
+        }
         if (data.darkName        !== undefined) room.darkName        = data.darkName
-        if (data.darkDesc        !== undefined) room.darkDesc        = data.darkDesc
-        if (data.suppressListing !== undefined) room.suppressListing = data.suppressListing
+        if (data.darkDesc        !== undefined) room.darkDesc        = assignFirstIds(data.darkDesc)
+        if (data.suppressListing !== undefined) {
+            room.suppressListing = typeof data.suppressListing === 'object'
+                ? makeCondition(data.suppressListing) as unknown as boolean
+                : data.suppressListing
+        }
+        if (data.afterTurn) {
+            room.afterTurn = data.afterTurn.map(rule => ({
+                conditions: (rule.when ?? []).map(makeCondition),
+                text:       assignFirstIds(rule.text),
+            }))
+        }
         rooms[key] = room
     }
 
@@ -269,7 +356,7 @@ function buildWorld(
             name:        data.name,
             aliases:     data.aliases    ?? [],
             adjectives:  data.adjectives ?? [],
-            description: data.description,
+            description: makeObjectDescription(data.description),
             location:    data.location,
             portable:    data.portable,
             handlers:    {},
@@ -283,22 +370,23 @@ function buildWorld(
         if (data.remapIn                  !== undefined) obj.remapIn                  = data.remapIn
         if (data.remapOn                  !== undefined) obj.remapOn                  = data.remapOn
         if (data.listed                   !== undefined) obj.listed                   = data.listed
-        if (data.specialDesc              !== undefined) obj.specialDesc              = data.specialDesc
-        if (data.initSpecialDesc          !== undefined) obj.initSpecialDesc          = data.initSpecialDesc
+        if (data.specialDesc              !== undefined) obj.specialDesc              = assignFirstIds(data.specialDesc)
+        if (data.initSpecialDesc          !== undefined) obj.initSpecialDesc          = assignFirstIds(data.initSpecialDesc)
         if (data.specialDescBeforeContents !== undefined) obj.specialDescBeforeContents = data.specialDescBeforeContents
         if (data.specialDescOrder         !== undefined) obj.specialDescOrder         = data.specialDescOrder
         if (data.stateDesc !== undefined) {
             if (typeof data.stateDesc === 'object') {
-                const { open: openMsg, closed: closedMsg } = data.stateDesc
+                const openMsg   = assignFirstIds(data.stateDesc.open)
+                const closedMsg = assignFirstIds(data.stateDesc.closed)
                 obj.stateDesc = (self: GameObject) => self.isOpen ? openMsg : closedMsg
             } else {
-                obj.stateDesc = data.stateDesc
+                obj.stateDesc = assignFirstIds(data.stateDesc)
             }
         }
         if (data.visibleInDark            !== undefined) obj.visibleInDark            = data.visibleInDark
-        if (data.readDesc                 !== undefined) obj.readDesc                 = data.readDesc
+        if (data.readDesc                 !== undefined) obj.readDesc                 = assignFirstIds(data.readDesc)
         if (data.scenery                  !== undefined) obj.scenery                  = data.scenery
-        if (data.notImportantMsg          !== undefined) obj.notImportantMsg          = data.notImportantMsg
+        if (data.notImportantMsg          !== undefined) obj.notImportantMsg          = assignFirstIds(data.notImportantMsg)
         if (data.otherSide                !== undefined) obj.otherSide                = data.otherSide
         // Compile typeResponses into runtime form and assign built-in handler.
         if (data.typeResponses) {
@@ -306,10 +394,11 @@ function buildWorld(
                 phrases:    new Set(rule.phrases),
                 conditions: (rule.when    ?? []).map(makeCondition),
                 effects:    (rule.effects ?? []).map(makeEffect),
-                text:       rule.text,
+                text:       assignFirstIds(rule.text),
+                redescribe: rule.redescribe ?? false,
             }));
             (obj as unknown as { typeResponses: CompiledRule[]; typeDefault?: string }).typeResponses = compiled;
-            (obj as unknown as { typeDefault?: string }).typeDefault = data.typeDefault
+            (obj as unknown as { typeDefault?: string }).typeDefault = data.typeDefault ? assignFirstIds(data.typeDefault) : data.typeDefault
             obj.handlers['type'] = terminalTypeHandler
         }
         objects[key] = obj
@@ -322,10 +411,17 @@ function buildWorld(
         State.set(flag, value)
     }
 
-    // Load help content from events.json.
-    World.loadHelp(eventsJson.help ?? {})
+    // Load help content from events.json (process directives in help texts).
+    const help = eventsJson.help ?? {}
+    if (help.default) help.default = assignFirstIds(help.default)
+    if (help.topics) {
+        for (const [k, v] of Object.entries(help.topics)) {
+            help.topics[k] = assignFirstIds(v)
+        }
+    }
+    World.loadHelp(help)
 
-    return eventsJson.intro ?? ''
+    return assignFirstIds(eventsJson.intro ?? '')
 }
 
 // ---------------------------------------------------------------------------

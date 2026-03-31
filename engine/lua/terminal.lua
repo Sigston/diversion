@@ -325,7 +325,7 @@ function Terminal.init()
             pushLine(msg, C.system)
         end
     end
-    local checkErrors = IntegrityCheck.run("game/data/diversion", checkPrint)
+    local checkErrors = IntegrityCheck.run(Loader.currentPath, checkPrint)
     if checkErrors > 0 then pushLine("", C.system) end
 
     -- Show prologue (if any) then the starting room description.

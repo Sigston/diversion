@@ -81,6 +81,18 @@ export const Defaults: Record<string, Handler> = {
         },
     },
 
+    read: {
+        verify(obj, _intent) {
+            if (!obj) return { illogical: "You don't see that here." }
+            if (!obj.readDesc) return { illogical: "There's nothing to read on that." }
+            return { logical: true }
+        },
+        action(obj, _intent) {
+            if (typeof obj.readDesc === 'function') return obj.readDesc(obj, World.currentContext())
+            return obj.readDesc as string
+        },
+    },
+
     look: {
         action() {
             return World.describeCurrentRoom()

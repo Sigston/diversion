@@ -131,6 +131,30 @@ Defaults["examine"] = {
 }
 
 -- ---------------------------------------------------------------------------
+-- read
+-- Returns the readDesc of an object. Distinct from examine — examine describes
+-- the object's appearance; read returns its textual content.
+-- ---------------------------------------------------------------------------
+Defaults["read"] = {
+    verify = function(obj, _intent)
+        if not obj then
+            return { illogical = "You don't see that here." }
+        end
+        if not obj.readDesc then
+            return { illogical = "There's nothing to read on that." }
+        end
+        return { logical = true }
+    end,
+
+    action = function(obj, _intent)
+        if type(obj.readDesc) == "function" then
+            return obj.readDesc(obj, World.currentContext())
+        end
+        return obj.readDesc
+    end,
+}
+
+-- ---------------------------------------------------------------------------
 -- look
 -- Describes the current room. No object involved.
 -- ---------------------------------------------------------------------------

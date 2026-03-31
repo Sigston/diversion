@@ -27,7 +27,9 @@ export interface GameObject {
     scenery?:         boolean
     notImportantMsg?: string
     otherSide?:       string
-    listed?:     boolean
+    listed?:          boolean
+    visibleInDark?:   boolean
+    readDesc?:        string | ((self: GameObject, ctx: WorldContext) => string)
     mentioned?:  boolean
     moved?:      boolean
     specialDesc?:              string | ((self: GameObject) => string)

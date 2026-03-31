@@ -4,13 +4,14 @@
 --
 -- Usage:
 --   Standalone:  lua test/integrity_check.lua [data-path]
---                (data-path defaults to "game/data/diversion")
+--                (data-path defaults to the path in game/config.json)
 --   As module:   local Check = require("test.integrity_check")
---                local errors, warnings = Check.run("game/data/diversion", printFn)
+--                local errors, warnings = Check.run(nil, printFn)
 --
 -- printFn receives plain strings. The caller applies colour if desired.
 -- Returns (errorCount, warningCount).
 
+package.path = "./?.lua;" .. package.path
 local json = require("lib.json")
 
 local IntegrityCheck = {}
@@ -49,7 +50,16 @@ end
 -- IntegrityCheck.run
 -- ---------------------------------------------------------------------------
 function IntegrityCheck.run(dataPath, printFn)
-    dataPath = dataPath or "game/data/diversion"
+    if not dataPath then
+        local src = readFile("game/config.json")
+        if src then
+            local ok, cfg = pcall(json.decode, src)
+            if ok and cfg and cfg.game then
+                dataPath = "game/data/" .. cfg.game
+            end
+        end
+        dataPath = dataPath or "game/data/diversion"
+    end
     printFn  = printFn  or print
 
     local errorCount   = 0
@@ -474,6 +484,12 @@ function IntegrityCheck.run(dataPath, printFn)
     end
 
     return errorCount, warningCount
+end
+
+-- Standalone entry point (only runs when invoked directly, not when required).
+if arg and arg[0] and arg[0]:match("integrity_check") then
+    local errors = IntegrityCheck.run(arg[1])
+    os.exit(errors > 0 and 1 or 0)
 end
 
 return IntegrityCheck

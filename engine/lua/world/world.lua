@@ -81,6 +81,13 @@ function World.currentContext()
     return {}
 end
 
+-- Returns true if the room has ambient light.
+-- Default: lit (isLit == nil or isLit == true).
+-- Override in JSON: "isLit": false for dark rooms.
+local function isIlluminated(room)
+    return room.isLit ~= false
+end
+
 -- Returns all objects currently in scope.
 -- Uses sorted room.objects for the top level; recurses into open containers
 -- (sorting their children by key for determinism); appends inventory last.
@@ -108,9 +115,11 @@ function World.inScope()
     end
 
     -- Top-level room objects (room.objects is kept sorted by key).
+    -- In an unlit room, only objects with visibleInDark = true are in scope.
+    local dark = not isIlluminated(room)
     for _, key in ipairs(room.objects) do
         local obj = objects[key]
-        if obj then
+        if obj and (not dark or obj.visibleInDark) then
             scope[#scope + 1] = obj
             if obj.contType == "on"
                     or (obj.contType == "in" and obj.isOpen) then
@@ -244,13 +253,6 @@ end
 -- ---------------------------------------------------------------------------
 -- Room description compositor
 -- ---------------------------------------------------------------------------
-
--- Returns true if the room has ambient light.
--- Default: lit (isLit == nil or isLit == true).
--- Override in JSON: "isLit": false for dark rooms.
-local function isIlluminated(room)
-    return room.isLit ~= false
-end
 
 -- Clears the mentioned flag on every object before each LOOK.
 local function unmentionAll()

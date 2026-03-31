@@ -183,6 +183,8 @@ function Loader.load(dataPath)
                 obj.stateDesc = data.stateDesc
             end
         end
+        if data.visibleInDark          ~= nil then obj.visibleInDark          = data.visibleInDark          end
+        if data.readDesc               ~= nil then obj.readDesc               = data.readDesc               end
         if data.scenery                ~= nil then obj.scenery                = data.scenery                end
         if data.notImportantMsg        ~= nil then obj.notImportantMsg        = data.notImportantMsg        end
         if data.otherSide              ~= nil then obj.otherSide              = data.otherSide              end

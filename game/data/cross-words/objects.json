@@ -1,0 +1,157 @@
+{
+  "start_door": {
+    "name": "door",
+    "aliases": ["door"],
+    "adjectives": ["south", "heavy"],
+    "description": "A heavy door with no handle or lock.",
+    "specialDesc": "A heavy door with no handle and no lock stands to the south.",
+    "location": "start_1",
+    "isOpen": false,
+    "otherSide": "start_door_b",
+    "fixed": true,
+    "listed": false
+  },
+  "start_door_b": {
+    "name": "door",
+    "description": "A heavy door.",
+    "location": "infant_2",
+    "isOpen": false,
+    "otherSide": "start_door",
+    "fixed": true,
+    "listed": false,
+    "stateDesc": { "open": "It is open.", "closed": "It is closed." }
+  },
+  "start_terminal": {
+    "name": "terminal",
+    "aliases": ["terminal", "keyboard", "keys"],
+    "description": "I wouldn't be able to see the keyboard, even if it wasn't dark - my head is rigidly pointing straight ahead.",
+    "location": "start_1",
+    "portable": false,
+    "visibleInDark": true,
+    "handlers": {
+      "type": "handlers.terminal.start"
+    }
+  },
+  "ixion_wheel": {
+    "name": "wheel",
+    "aliases": ["wheel"],
+    "adjectives": ["great", "spinning", "fiery", "Ixion's"],
+    "description": "A great wheel, ten feet across. You are lashed to it.",
+    "specialDesc": "A great wheel of fire dominates the room, spinning slowly. You are lashed to it.",
+    "location": "start_1",
+    "fixed": true,
+    "listed": false
+  },
+  "start_mirror": {
+    "name": "mirror",
+    "aliases": ["mirror", "glass", "reflection"],
+    "adjectives": ["great", "huge", "wall"],
+    "description": "A mirror covering the entire wall opposite you. In it you can see yourself, lashed to the wheel.",
+    "specialDesc": "A great mirror covers the entire wall opposite. In it, you can see yourself lashed to the wheel, and writing scrawled across the glass.",
+    "location": "start_1",
+    "fixed": true,
+    "listed": false
+  },
+  "mirror_writing": {
+    "name": "clue",
+    "aliases": ["clue", "scrawl"],
+    "adjectives": ["mirror"],
+    "description": "A crossword clue, scrawled in marker across the mirror. [TO BE WRITTEN]",
+    "location": "start_1",
+    "fixed": true,
+    "scenery": true
+  },
+  "lockbox_grid": {
+    "name": "boxes",
+    "aliases": ["boxes", "lockboxes", "grid", "wall"],
+    "adjectives": ["lock", "box"],
+    "description": "A 4x4 grid of lock boxes set into the wall behind the wheel. Each has a small dial with letters on it. The upper three rows are out of reach from here.",
+    "location": "start_1",
+    "fixed": true,
+    "scenery": true
+  },
+  "start_table": {
+    "name": "table",
+    "aliases": ["table"],
+    "description": "A plain table.",
+    "location": "start_1",
+    "fixed": true,
+    "contType": "on"
+  },
+  "greek_myth_book": {
+    "name": "book of greek myths",
+    "aliases": ["greek myths", "myth book", "greek book", "myths"],
+    "adjectives": ["greek"],
+    "description": "A hefty volume: Greek Myths, A Complete Reference. A ribbon bookmark hangs from the spine.",
+    "location": "start_table",
+    "portable": true
+  },
+  "biblical_ref_book": {
+    "name": "book of biblical references",
+    "aliases": ["biblical references", "bible book", "biblical book", "references"],
+    "adjectives": ["biblical"],
+    "description": "A hefty volume: The Complete Biblical Reference. Well-thumbed.",
+    "location": "start_table",
+    "portable": true
+  },
+  "door_writing": {
+    "name": "inscription",
+    "aliases": ["inscription", "sign"],
+    "adjectives": ["door", "above"],
+    "description": "Writing above the door. [TO BE WRITTEN — clues EXIT TARTARUS]",
+    "location": "start_1",
+    "fixed": true,
+    "scenery": true
+  },
+  "spotlights": {
+    "name": "spotlights",
+    "aliases": ["spotlight", "light", "lights", "shaft", "shafts"],
+    "description": "Two shafts of light illuminate two lecterns. I can't see where the light comes from, the source is far too bright.",
+    "location": "start_1",
+    "fixed": true,
+    "scenery": true,
+    "visibleInDark": true
+  },
+  "lectern_a": {
+    "name": "left lectern",
+    "aliases": ["lectern"],
+    "adjectives": ["first", "left"],
+    "description": "A wooden lectern, lit from above by a spotlight. It has a newspaper article attached to it, which I can just make out from here.",
+    "specialDesc": "Two lecterns stand to one side, each lit by its own spotlight.",
+    "location": "start_1",
+    "fixed": true,
+    "listed": false,
+    "visibleInDark": true
+  },
+  "lectern_b": {
+    "name": "right lectern",
+    "aliases": ["lectern"],
+    "adjectives": ["second", "right"],
+    "description": "A wooden lectern, lit from above by a spotlight. It has a a block of text written out by what looks like a typewriter. It is titled \"Cross Words\".",
+    "location": "start_1",
+    "fixed": true,
+    "listed": false,
+    "visibleInDark": true
+  },
+  "lectern_a_writing": {
+    "name": "article",
+    "aliases": ["article", "newspaper", "cutting", "clipping"],
+    "description": "A newspaper article, pasted down onto the left lectern. I can just make out the text.",
+    "readDesc": "[TO BE WRITTEN — newspaper article about the captor's greatness]",
+    "location": "start_1",
+    "fixed": true,
+    "scenery": true,
+    "visibleInDark": true
+  },
+  "lectern_b_writing": {
+    "name": "document",
+    "aliases": ["document", "text", "typewriting", "cross words", "words"],
+    "adjectives": ["typewritten", "cross"],
+    "description": "A block of typewritten text on the lectern, titled \"Cross Words\". I can just about read it from here.",
+    "readDesc": "[TO BE WRITTEN — the Cross Words document; introduces captor. Clue for FIAT LUX is a deliberate misspelling: \"Why don't you lat in the light?\"]",
+    "location": "start_1",
+    "fixed": true,
+    "scenery": true,
+    "visibleInDark": true
+  }
+}

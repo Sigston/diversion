@@ -80,7 +80,9 @@ interface ObjectJson {
     contType?:   'in' | 'on'
     remapIn?:    string
     remapOn?:    string
-    listed?:     boolean
+    listed?:          boolean
+    visibleInDark?:   boolean
+    readDesc?:        string
     specialDesc?:              string
     initSpecialDesc?:          string
     specialDescBeforeContents?: boolean
@@ -189,6 +191,8 @@ function buildWorld(
                 obj.stateDesc = data.stateDesc
             }
         }
+        if (data.visibleInDark            !== undefined) obj.visibleInDark            = data.visibleInDark
+        if (data.readDesc                 !== undefined) obj.readDesc                 = data.readDesc
         if (data.scenery                  !== undefined) obj.scenery                  = data.scenery
         if (data.notImportantMsg          !== undefined) obj.notImportantMsg          = data.notImportantMsg
         if (data.otherSide                !== undefined) obj.otherSide                = data.otherSide

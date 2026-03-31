@@ -140,8 +140,8 @@ end
 -- Returns nil if no verify() phase exists (= no objection, rank 100).
 -- ---------------------------------------------------------------------------
 local function getVerifyResult(obj, verb, intent)
-    -- Scenery objects are illogical targets for anything except examine.
-    if obj.scenery and verb ~= "examine" then
+    -- Scenery objects are illogical targets for anything except examine and read.
+    if obj.scenery and verb ~= "examine" and verb ~= "read" then
         return { illogical = obj.notImportantMsg or "That's not something you need to worry about." }
     end
     local handler = (obj.handlers and obj.handlers[verb]) or Defaults[verb]

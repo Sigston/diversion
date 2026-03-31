@@ -75,8 +75,8 @@ function Dispatcher.dispatch(intent)
     local obj  = intent.dobjRef     -- nil for verbs like look, inventory
     local room = World.currentRoom()
 
-    -- Scenery interception: non-examine verbs bounce off scenery objects.
-    if obj and obj.scenery and verb ~= "examine" then
+    -- Scenery interception: non-examine/read verbs bounce off scenery objects.
+    if obj and obj.scenery and verb ~= "examine" and verb ~= "read" then
         return obj.notImportantMsg or "That's not something you need to worry about."
     end
 

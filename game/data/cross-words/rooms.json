@@ -1,0 +1,204 @@
+{
+  "startRoom": "start_1",
+  "rooms": {
+    "start_1": {
+      "name": "The Start (1)",
+      "description": {
+        "firstVisit": "The start.",
+        "revisit": "The start."
+      },
+      "exits": {
+        "south": {
+          "dest": "infant_2",
+          "door": "start_door",
+          "condition": {
+            "type": "objectState",
+            "object": "start_door",
+            "property": "isOpen",
+            "value": true
+          },
+          "blockedMsg": "The door is shut."
+        }
+      },
+      "isLit": false,
+      "darkName": "Almost darkness",
+      "darkDesc": "Two spotlights light up two lecterns ahead of me. I feel a keyboard underneath my fingers."
+    },
+    "infant_2": {
+      "name": "The Infant (2)",
+      "description": {
+        "firstVisit": "The infant.",
+        "revisit": "The infant."
+      },
+      "exits": {
+        "north": {
+          "dest": "start_1",
+          "door": "start_door_b",
+          "condition": {
+            "type": "objectState",
+            "object": "start_door_b",
+            "property": "isOpen",
+            "value": true
+          },
+          "blockedMsg": "The door is shut."
+        },
+        "east": "infant_3",
+        "west": "justice_10",
+        "south": "schoolboy_4"
+      }
+    },
+    "infant_3": {
+      "name": "The Infant (3)",
+      "description": {
+        "firstVisit": "The infant.",
+        "revisit": "The infant."
+      },
+      "exits": {
+        "west": "infant_2"
+      }
+    },
+    "schoolboy_4": {
+      "name": "The Schoolboy (4)",
+      "description": {
+        "firstVisit": "The schoolboy.",
+        "revisit": "The schoolboy."
+      },
+      "exits": {
+        "north": "infant_2",
+        "south": "lover_5"
+      }
+    },
+    "lover_5": {
+      "name": "The Lover (5)",
+      "description": {
+        "firstVisit": "The lover.",
+        "revisit": "The lover."
+      },
+      "exits": {
+        "north": "schoolboy_4",
+        "east": "lover_6",
+        "west": "OA_14",
+        "south": "soldier_7"
+      }
+    },
+    "lover_6": {
+      "name": "The Lover (6)",
+      "description": {
+        "firstVisit": "The lover.",
+        "revisit": "The lover."
+      },
+      "exits": {
+        "west": "lover_5"
+      }
+    },
+    "soldier_7": {
+      "name": "The Soldier (7)",
+      "description": {
+        "firstVisit": "The soldier.",
+        "revisit": "The soldier."
+      },
+      "exits": {
+        "north": "lover_5"
+      }
+    },
+    "justice_8": {
+      "name": "The Justice (8)",
+      "description": {
+        "firstVisit": "The justice.",
+        "revisit": "The justice."
+      },
+      "exits": {
+        "east": "justice_9"
+      }
+    },
+    "justice_9": {
+      "name": "The Justice (9)",
+      "description": {
+        "firstVisit": "The justice.",
+        "revisit": "The justice."
+      },
+      "exits": {
+        "west": "justice_8",
+        "east": "justice_10",
+        "south": "justice_11"
+      }
+    },
+    "justice_10": {
+      "name": "The Justice (10)",
+      "description": {
+        "firstVisit": "The justice.",
+        "revisit": "The justice."
+      },
+      "exits": {
+        "west": "justice_9",
+        "east": "infant_2"
+      }
+    },
+    "justice_11": {
+      "name": "The Justice (11)",
+      "description": {
+        "firstVisit": "The justice.",
+        "revisit": "The justice."
+      },
+      "exits": {
+        "north": "justice_9",
+        "south": "OA_13"
+      }
+    },
+    "OA_12": {
+      "name": "Old Age (12)",
+      "description": {
+        "firstVisit": "Old age.",
+        "revisit": "Old age."
+      },
+      "exits": {
+        "east": "OA_13"
+      }
+    },
+    "OA_13": {
+      "name": "Old Age (13)",
+      "description": {
+        "firstVisit": "Old age.",
+        "revisit": "Old age."
+      },
+      "exits": {
+        "west": "OA_12",
+        "east": "OA_14",
+        "north": "justice_11",
+        "south": "second_childhood_15"
+      }
+    },
+    "OA_14": {
+      "name": "Old Age (14)",
+      "description": {
+        "firstVisit": "Old age.",
+        "revisit": "Old age."
+      },
+      "exits": {
+        "west": "OA_13",
+        "east": "lover_5"
+      }
+    },
+    "second_childhood_15": {
+      "name": "Second Childhood (15)",
+      "description": {
+        "firstVisit": "Second childhood.",
+        "revisit": "Second childhood."
+      },
+      "exits": {
+        "north": "OA_13",
+        "south": "exit"
+      }
+    },
+    "exit": {
+      "name": "Exit",
+      "description": {
+        "firstVisit": "The exit.",
+        "revisit": "The exit."
+      },
+      "exits": {
+        "north": "second_childhood_15"
+      }
+    }
+  }
+}

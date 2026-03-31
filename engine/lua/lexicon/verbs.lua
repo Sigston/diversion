@@ -25,8 +25,13 @@ local Verbs = {
     },
 
     examine = {
-        synonyms    = { "examine", "x", "inspect", "describe", "read",
-                        "look at" },
+        synonyms    = { "examine", "x", "inspect", "describe", "look at" },
+        resolveObj  = true,
+        resolveFirst = "dobj",
+    },
+
+    read = {
+        synonyms    = { "read" },
         resolveObj  = true,
         resolveFirst = "dobj",
     },

@@ -263,9 +263,11 @@ export const World = {
         }
 
         // Top-level room objects (room.objects is kept sorted by key).
+        // In an unlit room, only objects with visibleInDark = true are in scope.
+        const dark = !isIlluminated(room)
         for (const key of room.objects) {
             const obj = objects[key]
-            if (obj) {
+            if (obj && (!dark || obj.visibleInDark)) {
                 scope.push(obj)
                 if (obj.contType === 'on'
                         || (obj.contType === 'in' && obj.isOpen)) {

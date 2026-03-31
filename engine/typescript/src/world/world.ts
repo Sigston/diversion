@@ -15,6 +15,7 @@ let rooms:          Record<string, Room>       = {}
 let objects:        Record<string, GameObject> = {}
 let currentRoomKey  = ''
 let startRoomKey    = ''
+let helpData: { default?: string; topics: Record<string, string> } = { topics: {} }
 
 interface ObjectSnap { location: string | null; locked?: boolean; isOpen?: boolean; moved?: boolean }
 interface RoomSnap   { visited: boolean }
@@ -406,5 +407,19 @@ export const World = {
 
     getConnector(room: Room, dir: string): Connector | undefined {
         return room.exits[dir]
+    },
+
+    loadHelp(data: { default?: string; topics?: Record<string, string> }): void {
+        helpData.default = data.default
+        helpData.topics  = data.topics ?? {}
+    },
+
+    getHelp(topic: string): string {
+        if (topic && topic !== '') {
+            const text = helpData.topics[topic]
+            if (text) return text
+            return `No help available for '${topic}'.`
+        }
+        return helpData.default ?? "Type commands to interact with the world. Try HELP [topic] for specifics."
     },
 }

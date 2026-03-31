@@ -90,6 +90,85 @@ local function makeDescription(desc)
 end
 
 -- ---------------------------------------------------------------------------
+-- makeCondition — compiles a JSON condition object to a boolean closure.
+-- Condition types match the connector condition schema:
+--   { type = "flagCheck",   flag, value }
+--   { type = "objectState", object, property, value }
+-- ---------------------------------------------------------------------------
+local function makeCondition(cond)
+    if cond.type == "flagCheck" then
+        local flag = cond.flag
+        local val  = cond.value
+        return function() return State.get(flag) == val end
+    elseif cond.type == "objectState" then
+        local objKey = cond.object
+        local prop   = cond.property
+        local val    = cond.value
+        return function()
+            local o = World.getObject(objKey)
+            return o ~= nil and o[prop] == val
+        end
+    end
+    return function() return true end  -- unknown type; always pass
+end
+
+-- ---------------------------------------------------------------------------
+-- makeEffect — compiles a JSON effect object to a void closure.
+-- Effect types:
+--   { type = "setFlag",       flag, value }
+--   { type = "setObjectProp", object, property, value }
+-- ---------------------------------------------------------------------------
+local function makeEffect(eff)
+    if eff.type == "setFlag" then
+        local flag = eff.flag
+        local val  = eff.value
+        return function() State.set(flag, val) end
+    elseif eff.type == "setObjectProp" then
+        local objKey = eff.object
+        local prop   = eff.property
+        local val    = eff.value
+        return function()
+            local o = World.getObject(objKey)
+            if o then o[prop] = val end
+        end
+    end
+    return function() end  -- unknown type; no-op
+end
+
+-- ---------------------------------------------------------------------------
+-- terminalTypeHandler — built-in handler assigned to objects with typeResponses.
+--
+-- Iterates the object's compiled typeResponses in order. For each rule whose
+-- phrases include the typed input and whose conditions all pass, applies effects
+-- and returns the rule's text. Falls through to typeDefault if nothing matches.
+-- ---------------------------------------------------------------------------
+local terminalTypeHandler = {
+    verify = function(_obj, intent)
+        if not intent.dobjWords or #intent.dobjWords == 0 then
+            return { illogicalNow = "Type what?" }
+        end
+        return { logical = true }
+    end,
+
+    action = function(obj, intent)
+        local phrase = table.concat(intent.dobjWords, " ")
+        for _, rule in ipairs(obj.typeResponses) do
+            if rule.phrases[phrase] then
+                local ok = true
+                for _, cond in ipairs(rule.conditions) do
+                    if not cond() then ok = false; break end
+                end
+                if ok then
+                    for _, eff in ipairs(rule.effects) do eff() end
+                    return rule.text
+                end
+            end
+        end
+        return obj.typeDefault or "The cursor blinks. Nothing happens."
+    end,
+}
+
+-- ---------------------------------------------------------------------------
 -- Loader.load — public entry point. Call once before World.reset().
 -- dataPath: directory containing rooms.json, objects.json, events.json.
 --   If omitted, reads game/config.json to determine which game folder to load.
@@ -188,10 +267,44 @@ function Loader.load(dataPath)
         if data.scenery                ~= nil then obj.scenery                = data.scenery                end
         if data.notImportantMsg        ~= nil then obj.notImportantMsg        = data.notImportantMsg        end
         if data.otherSide              ~= nil then obj.otherSide              = data.otherSide              end
+        -- Compile typeResponses into runtime form and assign built-in handler.
+        if data.typeResponses then
+            local compiled = {}
+            for _, rule in ipairs(data.typeResponses) do
+                local phrases = {}
+                for _, p in ipairs(rule.phrases) do phrases[p] = true end
+                local conditions = {}
+                for _, cond in ipairs(rule.when or {}) do
+                    conditions[#conditions + 1] = makeCondition(cond)
+                end
+                local effects = {}
+                for _, eff in ipairs(rule.effects or {}) do
+                    effects[#effects + 1] = makeEffect(eff)
+                end
+                compiled[#compiled + 1] = {
+                    phrases    = phrases,
+                    conditions = conditions,
+                    effects    = effects,
+                    text       = rule.text,
+                }
+            end
+            obj.typeResponses    = compiled
+            obj.typeDefault      = data.typeDefault
+            obj.handlers["type"] = terminalTypeHandler
+        end
         objects[key] = obj
     end
 
     World.load(rooms, objects, roomsJson.startRoom)
+
+    -- Apply initial flag values from events.json.
+    for flag, value in pairs(eventsJson.flags or {}) do
+        State.set(flag, value)
+    end
+
+    -- Load help content from events.json.
+    World.loadHelp(eventsJson.help or {})
+
     return eventsJson.intro or ""
 end
 

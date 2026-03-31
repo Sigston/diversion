@@ -15,6 +15,7 @@
 
 local World    = require("engine.lua.world.world")
 local Defaults = require("engine.lua.world.defaults")
+local Verbs    = require("engine.lua.lexicon.verbs")
 
 local Dispatcher = {}
 
@@ -83,6 +84,19 @@ function Dispatcher.dispatch(intent)
     -- 1. Object-specific handler
     if obj and obj.handlers and obj.handlers[verb] then
         return Dispatcher.runCycle(obj.handlers[verb], obj, intent)
+    end
+
+    -- 1b. scopeDispatch: verb has no resolved dobjRef but wants an ambient
+    -- receiver. Scan scope for the first object that has a handler for this verb.
+    -- Used by TYPE, where the terminal is found implicitly rather than named.
+    local verbEntry = Verbs[verb]
+    if not obj and verbEntry and verbEntry.scopeDispatch then
+        for _, candidate in ipairs(World.inScope()) do
+            if candidate.handlers and candidate.handlers[verb] then
+                return Dispatcher.runCycle(candidate.handlers[verb], candidate, intent)
+            end
+        end
+        -- No handler-bearing object found; fall through to room/default.
     end
 
     -- 2. Room-level handler

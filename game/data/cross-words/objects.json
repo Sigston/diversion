@@ -28,9 +28,47 @@
     "location": "start_1",
     "portable": false,
     "visibleInDark": true,
-    "handlers": {
-      "type": "handlers.terminal.start"
-    }
+    "typeDefault": "The cursor blinks. Nothing happens.",
+    "typeResponses": [
+      {
+        "phrases": ["fiat lux"],
+        "when": [{ "type": "flagCheck", "flag": "lights_on", "value": false }],
+        "effects": [{ "type": "setFlag", "flag": "lights_on", "value": true }],
+        "text": "There is a flash, and suddenly the room is illuminated.\n\nCorrugated metal walls. A great mirror covers the wall opposite — and in it you can see yourself, lashed to an enormous wheel of fire. Writing is scrawled across the glass. To the south, a heavy door bears an inscription above its frame."
+      },
+      {
+        "phrases": ["fiat lux"],
+        "text": "The lights are already on."
+      },
+      {
+        "phrases": ["unbind ixion", "free ixion", "release ixion", "liberate ixion", "let go ixion"],
+        "when": [{ "type": "flagCheck", "flag": "player_restrained", "value": true }],
+        "effects": [{ "type": "setFlag", "flag": "player_restrained", "value": false }],
+        "text": "The wheel shudders and slows. The flames gutter out. The straps fall away and you step free onto the floor.\n\nBehind where the wheel stood, a 4\u00d74 grid of lock boxes is set into the wall. The upper three rows are out of reach from here."
+      },
+      {
+        "phrases": ["unbind ixion", "free ixion", "release ixion", "liberate ixion", "let go ixion"],
+        "text": "You are no longer bound to the wheel."
+      },
+      {
+        "phrases": ["exit tartarus", "leave tartarus"],
+        "when": [{ "type": "flagCheck", "flag": "player_restrained", "value": true }],
+        "text": "You are bound to the wheel. You cannot go anywhere."
+      },
+      {
+        "phrases": ["exit tartarus", "leave tartarus"],
+        "when": [{ "type": "objectState", "object": "start_door", "property": "isOpen", "value": false }],
+        "effects": [
+          { "type": "setObjectProp", "object": "start_door", "property": "isOpen", "value": true },
+          { "type": "setObjectProp", "object": "start_door_b", "property": "isOpen", "value": true }
+        ],
+        "text": "There is a heavy clunk. The door swings open."
+      },
+      {
+        "phrases": ["exit tartarus", "leave tartarus"],
+        "text": "The door is already open."
+      }
+    ]
   },
   "ixion_wheel": {
     "name": "wheel",

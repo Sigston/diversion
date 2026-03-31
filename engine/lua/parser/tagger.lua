@@ -91,7 +91,10 @@ function Tagger.tag(tokens)
 
     -- Step 5: strip stopwords from each span.
     -- dobjWords and iobjWords are what the resolver uses to match objects.
-    local dobjWords = stripStopwords(dobjSpan)
+    -- Exception: if the verb has rawDobj = true, preserve the dobj span verbatim
+    -- (the typed phrase is free text and must not have words removed).
+    local verbEntry = Verbs[verb]
+    local dobjWords = (verbEntry and verbEntry.rawDobj) and dobjSpan or stripStopwords(dobjSpan)
     local iobjWords = iobjSpan and stripStopwords(iobjSpan) or nil
 
     return {

@@ -87,7 +87,9 @@ export interface CommandIntent {
 }
 
 export interface VerbEntry {
-    synonyms:     string[]
-    resolveObj:   boolean
+    synonyms:      string[]
+    resolveObj:    boolean
     resolveFirst?: 'dobj' | 'iobj'
+    rawDobj?:      boolean  // skip stopword stripping on the dobj span (typed free text)
+    scopeDispatch?: boolean // dispatcher scans scope for a handler-bearing object
 }

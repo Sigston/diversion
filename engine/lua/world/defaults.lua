@@ -155,6 +155,17 @@ Defaults["read"] = {
 }
 
 -- ---------------------------------------------------------------------------
+-- type
+-- Fallback when no terminal is in scope. The real work happens in the
+-- terminal object's own handler (reached via scopeDispatch in the dispatcher).
+-- ---------------------------------------------------------------------------
+Defaults["type"] = {
+    action = function(_obj, _intent)
+        return "There's nothing here to type on."
+    end,
+}
+
+-- ---------------------------------------------------------------------------
 -- look
 -- Describes the current room. No object involved.
 -- ---------------------------------------------------------------------------
@@ -481,14 +492,14 @@ Defaults["wait"] = {
 }
 
 -- ---------------------------------------------------------------------------
--- help — lists available commands.
+-- help — returns authored help text from events.json.
+-- "help" alone returns the default help block.
+-- "help <topic>" returns the topic text, or a "no help available" message.
 -- ---------------------------------------------------------------------------
 Defaults["help"] = {
-    action = function(_obj, _intent)
-        return "Commands: look, examine [thing], take [thing], drop [thing],\n" ..
-               "inventory, go [direction], north, south, east, west,\n" ..
-               "put [thing] in/on [thing], unlock/lock [thing] with [key],\n" ..
-               "wait, quit."
+    action = function(_obj, intent)
+        local topic = intent.dobjWords and table.concat(intent.dobjWords, " ") or ""
+        return World.getHelp(topic)
     end,
 }
 

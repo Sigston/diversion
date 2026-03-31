@@ -2,9 +2,9 @@
 // See engine/lua/parser/tagger.lua for documentation.
 
 import type { CommandIntent } from '../types.ts'
-import { synonymMap }   from '../lexicon/verbs.ts'
-import { Prepositions } from '../lexicon/prepositions.ts'
-import { Stopwords }    from '../lexicon/stopwords.ts'
+import { synonymMap, Verbs } from '../lexicon/verbs.ts'
+import { Prepositions }      from '../lexicon/prepositions.ts'
+import { Stopwords }         from '../lexicon/stopwords.ts'
 
 function stripStopwords(words: string[]): string[] {
     return words.filter(w => !Stopwords.has(w))
@@ -41,9 +41,13 @@ export function tag(tokens: string[]): CommandIntent | null {
         iobjSpan = null
     }
 
+    // rawDobj verbs (e.g. type) preserve the typed phrase verbatim — no stripping.
+    const verbEntry = Verbs[verb]
+    const dobjWords = verbEntry?.rawDobj ? dobjSpan : stripStopwords(dobjSpan)
+
     return {
-        verb:      verb,
-        dobjWords: stripStopwords(dobjSpan),
+        verb,
+        dobjWords,
         dobjRef:   null,
         prep:      prep,
         iobjWords: iobjSpan !== null ? stripStopwords(iobjSpan) : null,

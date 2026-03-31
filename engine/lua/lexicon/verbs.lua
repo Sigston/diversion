@@ -117,6 +117,13 @@ local Verbs = {
     ["in"] = { synonyms = { "in"        }, resolveObj = false },
     out   = { synonyms = { "out"        }, resolveObj = false },
 
+    type = {
+        synonyms      = { "type", "enter", "input" },
+        resolveObj    = false,   -- dobj is free text, not a game object
+        rawDobj       = true,    -- skip stopword stripping; preserve the typed phrase verbatim
+        scopeDispatch = true,    -- dispatcher scans scope for a handler-bearing object
+    },
+
     wait = {
         synonyms   = { "wait", "z" },
         resolveObj = false,
@@ -125,6 +132,7 @@ local Verbs = {
     help = {
         synonyms   = { "help", "?" },
         resolveObj = false,
+        rawDobj    = true,   -- preserve topic phrase verbatim (no stopword stripping)
     },
 
     quit = {

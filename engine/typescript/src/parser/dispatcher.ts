@@ -4,6 +4,7 @@
 import type { CommandIntent, Handler, GameObject } from '../types.ts'
 import { World }    from '../world/world.ts'
 import { Defaults } from '../world/defaults.ts'
+import { Verbs }    from '../lexicon/verbs.ts'
 
 function runCycle(handler: Handler, obj: GameObject | null, intent: CommandIntent): string {
     if (handler.verify) {
@@ -37,6 +38,17 @@ export function dispatch(intent: CommandIntent): string {
     // 1. Object-specific handler
     if (obj && obj.handlers[verb]) {
         return runCycle(obj.handlers[verb], obj, intent)
+    }
+
+    // 1b. scopeDispatch: verb has no resolved dobjRef but wants an ambient
+    // receiver. Scan scope for the first object that has a handler for this verb.
+    if (!obj && Verbs[verb]?.scopeDispatch) {
+        for (const candidate of World.inScope()) {
+            if (candidate.handlers[verb]) {
+                return runCycle(candidate.handlers[verb], candidate, intent)
+            }
+        }
+        // Nothing found; fall through to room/default.
     }
 
     // 2. Room-level handler

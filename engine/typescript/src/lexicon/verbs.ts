@@ -87,6 +87,13 @@ const verbTable: Record<string, VerbEntry> = {
     in:    { synonyms: ['in'        ], resolveObj: false },
     out:   { synonyms: ['out'       ], resolveObj: false },
 
+    type: {
+        synonyms:      ['type', 'enter', 'input'],
+        resolveObj:    false,
+        rawDobj:       true,   // preserve typed phrase verbatim; no stopword stripping
+        scopeDispatch: true,   // dispatcher scans scope for a handler-bearing object
+    },
+
     wait: {
         synonyms:   ['wait', 'z'],
         resolveObj: false,

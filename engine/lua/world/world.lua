@@ -18,6 +18,7 @@ local rooms          = {}
 local objects        = {}
 local currentRoomKey = ""
 local startRoomKey   = ""
+local helpData       = { default = nil, topics = {} }
 
 -- Snapshot of mutable object/room state taken at load time, used by reset().
 local initialState = {}
@@ -177,6 +178,29 @@ function World.describeInventory()
     if #carried == 0 then return "You are carrying nothing." end
     table.sort(carried)
     return "You are carrying: " .. table.concat(carried, ", ") .. "."
+end
+
+-- ---------------------------------------------------------------------------
+-- World.loadHelp — stores help content loaded from events.json.
+-- data: { default = "...", topics = { examine = "...", ... } }
+-- ---------------------------------------------------------------------------
+function World.loadHelp(data)
+    helpData.default = data.default
+    helpData.topics  = data.topics or {}
+end
+
+-- ---------------------------------------------------------------------------
+-- World.getHelp — returns help text for a topic string, or the default text.
+-- topic: a lowercased string from intent.dobjWords, e.g. "examine" or "".
+-- Falls back to helpData.default, then a bare engine fallback.
+-- ---------------------------------------------------------------------------
+function World.getHelp(topic)
+    if topic and topic ~= "" then
+        local text = helpData.topics[topic]
+        if text then return text end
+        return "No help available for '" .. topic .. "'."
+    end
+    return helpData.default or "Type commands to interact with the world. Try HELP [topic] for specifics."
 end
 
 function World.reset()

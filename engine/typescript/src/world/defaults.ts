@@ -93,6 +93,14 @@ export const Defaults: Record<string, Handler> = {
         },
     },
 
+    // Fallback when no terminal is in scope. Real work happens in the terminal
+    // object's own handler (reached via scopeDispatch in the dispatcher).
+    type: {
+        action() {
+            return "There's nothing here to type on."
+        },
+    },
+
     look: {
         action() {
             return World.describeCurrentRoom()
@@ -287,13 +295,13 @@ Defaults['wait'] = {
     action() { return 'Time passes.' },
 }
 
-// help — lists available commands.
+// help — returns authored help text from events.json.
+// "help" alone returns the default help block.
+// "help <topic>" returns the topic text, or a "no help available" message.
 Defaults['help'] = {
-    action() {
-        return 'Commands: look, examine [thing], take [thing], drop [thing],\n' +
-               'inventory, go [direction], north, south, east, west,\n' +
-               'put [thing] in/on [thing], unlock/lock [thing] with [key],\n' +
-               'wait, quit.'
+    action(_obj, intent) {
+        const topic = (intent.dobjWords ?? []).join(' ')
+        return World.getHelp(topic)
     },
 }
 

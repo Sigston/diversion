@@ -6,7 +6,7 @@
 // loadWorld()     — loads game/data/diversion/ (the real game)
 // loadTestWorld() — loads game/data/test/ (parser test fixtures)
 
-import type { Room, GameObject, WorldContext, Connector } from '../types.ts'
+import type { Room, GameObject, WorldContext, Connector, Handler } from '../types.ts'
 import { World } from './world.ts'
 import { State } from './state.ts'
 import { Settings } from './settings.ts'
@@ -22,6 +22,11 @@ import diversionObjectsJson  from '../../../../game/data/diversion/objects.json'
 import diversionEventsJson   from '../../../../game/data/diversion/events.json'
 import diversionSettingsJson from '../../../../game/data/diversion/settings.json'
 
+import crossWordsRoomsJson    from '../../../../game/data/cross-words/rooms.json'
+import crossWordsObjectsJson  from '../../../../game/data/cross-words/objects.json'
+import crossWordsEventsJson   from '../../../../game/data/cross-words/events.json'
+import crossWordsSettingsJson from '../../../../game/data/cross-words/settings.json'
+
 const gameDatasets: Record<string, {
     rooms:    unknown
     objects:  unknown
@@ -33,6 +38,12 @@ const gameDatasets: Record<string, {
         objects:  diversionObjectsJson,
         events:   diversionEventsJson,
         settings: diversionSettingsJson,
+    },
+    'cross-words': {
+        rooms:    crossWordsRoomsJson,
+        objects:  crossWordsObjectsJson,
+        events:   crossWordsEventsJson,
+        settings: crossWordsSettingsJson,
     },
     // To add a new game:
     //   1. Add its imports above
@@ -47,12 +58,19 @@ import testEventsJson  from '../../../../game/data/test/events.json'
 // JSON shape types — the raw data as it comes from the files.
 // ---------------------------------------------------------------------------
 interface ConditionJson { type: string; flag?: string; object?: string; property?: string; value: unknown }
+interface EffectJson    { type: string; flag?: string; object?: string; property?: string; value: unknown }
 interface ExitJson {
     dest:          string
     condition?:    ConditionJson
     traversalMsg?: string
     blockedMsg?:   string
     door?:         string
+}
+interface TypeResponseJson {
+    phrases:  string[]
+    when?:    ConditionJson[]
+    effects?: EffectJson[]
+    text:     string
 }
 
 interface RoomJson {
@@ -91,6 +109,8 @@ interface ObjectJson {
     scenery?:                  boolean
     notImportantMsg?:          string
     otherSide?:                string
+    typeDefault?:              string
+    typeResponses?:            TypeResponseJson[]
 }
 
 // ---------------------------------------------------------------------------
@@ -128,13 +148,97 @@ function makeDescription(
 }
 
 // ---------------------------------------------------------------------------
+// makeCondition / makeEffect — compile JSON condition/effect objects to closures.
+// Condition types match the connector condition schema.
+// Effect types:
+//   { type: "setFlag",       flag, value }
+//   { type: "setObjectProp", object, property, value }
+// ---------------------------------------------------------------------------
+function makeCondition(cond: ConditionJson): () => boolean {
+    if (cond.type === 'flagCheck') {
+        const { flag, value } = cond
+        return () => State.get(flag as string) === value
+    }
+    if (cond.type === 'objectState') {
+        const { object: objKey, property: prop, value } = cond
+        return () => {
+            const obj = World.getObject(objKey as string)
+            return obj !== null && (obj as unknown as Record<string, unknown>)[prop as string] === value
+        }
+    }
+    return () => true  // unknown type; always pass
+}
+
+function makeEffect(eff: EffectJson): () => void {
+    if (eff.type === 'setFlag') {
+        const { flag, value } = eff
+        return () => State.set(flag as string, value)
+    }
+    if (eff.type === 'setObjectProp') {
+        const { object: objKey, property: prop, value } = eff
+        return () => {
+            const obj = World.getObject(objKey as string)
+            if (obj) (obj as unknown as Record<string, unknown>)[prop as string] = value
+        }
+    }
+    return () => {}  // unknown type; no-op
+}
+
+// ---------------------------------------------------------------------------
+// Compiled terminal rule — internal shape after JSON compilation.
+// ---------------------------------------------------------------------------
+interface CompiledRule {
+    phrases:    Set<string>
+    conditions: (() => boolean)[]
+    effects:    (() => void)[]
+    text:       string
+}
+
+// ---------------------------------------------------------------------------
+// terminalTypeHandler — built-in handler assigned to objects with typeResponses.
+//
+// Iterates the object's compiled typeResponses in order. For each rule whose
+// phrases include the typed input and whose conditions all pass, applies effects
+// and returns the rule's text. Falls through to typeDefault if nothing matches.
+// ---------------------------------------------------------------------------
+const terminalTypeHandler: Handler = {
+    verify(_obj, intent) {
+        if (!intent.dobjWords || intent.dobjWords.length === 0) {
+            return { illogicalNow: 'Type what?' }
+        }
+        return { logical: true }
+    },
+
+    action(obj, intent) {
+        const phrase = intent.dobjWords.join(' ')
+        const rules  = (obj as unknown as { typeResponses: CompiledRule[] }).typeResponses
+        const dflt   = (obj as unknown as { typeDefault?: string }).typeDefault
+        for (const rule of rules) {
+            if (rule.phrases.has(phrase)) {
+                if (rule.conditions.every(c => c())) {
+                    rule.effects.forEach(e => e())
+                    return rule.text
+                }
+            }
+        }
+        return dflt ?? "The cursor blinks. Nothing happens."
+    },
+}
+
+// ---------------------------------------------------------------------------
 // buildWorld — shared loader logic for any data set.
 // Returns the intro string from events.json (empty string if none).
 // ---------------------------------------------------------------------------
+interface EventsJson {
+    intro?:  string
+    flags?:  Record<string, unknown>
+    help?:   { default?: string; topics?: Record<string, string> }
+}
+
 function buildWorld(
     roomsJson:    { startRoom: string; rooms: Record<string, RoomJson> },
     objectsJson:  Record<string, ObjectJson>,
-    eventsJson:   { intro?: string },
+    eventsJson:   EventsJson,
     settingsJson: Record<string, unknown> = {}
 ): string {
     Settings.load(settingsJson)
@@ -196,10 +300,31 @@ function buildWorld(
         if (data.scenery                  !== undefined) obj.scenery                  = data.scenery
         if (data.notImportantMsg          !== undefined) obj.notImportantMsg          = data.notImportantMsg
         if (data.otherSide                !== undefined) obj.otherSide                = data.otherSide
+        // Compile typeResponses into runtime form and assign built-in handler.
+        if (data.typeResponses) {
+            const compiled: CompiledRule[] = data.typeResponses.map(rule => ({
+                phrases:    new Set(rule.phrases),
+                conditions: (rule.when    ?? []).map(makeCondition),
+                effects:    (rule.effects ?? []).map(makeEffect),
+                text:       rule.text,
+            }));
+            (obj as unknown as { typeResponses: CompiledRule[]; typeDefault?: string }).typeResponses = compiled;
+            (obj as unknown as { typeDefault?: string }).typeDefault = data.typeDefault
+            obj.handlers['type'] = terminalTypeHandler
+        }
         objects[key] = obj
     }
 
     World.load(rooms, objects, roomsJson.startRoom)
+
+    // Apply initial flag values from events.json.
+    for (const [flag, value] of Object.entries(eventsJson.flags ?? {})) {
+        State.set(flag, value)
+    }
+
+    // Load help content from events.json.
+    World.loadHelp(eventsJson.help ?? {})
+
     return eventsJson.intro ?? ''
 }
 
@@ -214,7 +339,7 @@ export function loadWorld(): string {
     return buildWorld(
         dataset.rooms    as { startRoom: string; rooms: Record<string, RoomJson> },
         dataset.objects  as Record<string, ObjectJson>,
-        dataset.events   as { intro?: string },
+        dataset.events   as EventsJson,
         dataset.settings as Record<string, unknown>
     )
 }
@@ -227,6 +352,6 @@ export function loadTestWorld(): string {
     return buildWorld(
         testRoomsJson   as { startRoom: string; rooms: Record<string, RoomJson> },
         testObjectsJson as Record<string, ObjectJson>,
-        testEventsJson  as { intro?: string }
+        testEventsJson  as EventsJson
     )
 }
